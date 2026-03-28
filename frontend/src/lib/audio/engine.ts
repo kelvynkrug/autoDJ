@@ -202,6 +202,26 @@ export class AudioEngine {
     return this.currentIndex
   }
 
+  /** Retorna o AudioContext. */
+  getContext(): AudioContext {
+    return this.context
+  }
+
+  /** Retorna o GainNode master. */
+  getMasterGain(): GainNode {
+    return this.masterGain
+  }
+
+  /** Retorna o Deck ativo (público). */
+  getActiveDeckPublic(): Deck {
+    return this.activeDeck === 'A' ? this.deckA : this.deckB
+  }
+
+  /** Retorna o AudioBufferSourceNode do deck ativo, ou null. */
+  getActiveDeckSource(): AudioBufferSourceNode | null {
+    return this.getActiveDeckPublic().getSource()
+  }
+
   // ────────────────────────────────────────────────────────────────
   // Internos
   // ────────────────────────────────────────────────────────────────

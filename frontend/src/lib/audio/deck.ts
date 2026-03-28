@@ -231,6 +231,11 @@ export class Deck {
   getOutput(): GainNode {
     return this.output
   }
+
+  /** Retorna o AudioBufferSourceNode ativo, ou null se não estiver tocando. */
+  getSource(): AudioBufferSourceNode | null {
+    return this.source
+  }
 }
 
 function clampEQ(db: number): number {

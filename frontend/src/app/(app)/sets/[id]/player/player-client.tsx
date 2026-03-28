@@ -6,8 +6,10 @@ import { NowPlaying } from '@/components/player/now-playing'
 import { PlayerControls } from '@/components/player/player-controls'
 import { VolumeControl } from '@/components/player/volume-control'
 import { TrackProgress } from '@/components/player/track-progress'
+import { EffectsPad } from '@/components/player/effects-pad'
 import type { DJSet, SetTrack } from '@/lib/types'
 import { AudioEngine } from '@/lib/audio/engine'
+import { DJEffects } from '@/lib/audio/effects'
 import type { PlayableTrack } from '@/lib/audio/types'
 
 async function fetchAudioUrl(trackId: string): Promise<string | null> {
@@ -27,6 +29,7 @@ export function PlayerClient({ set }: { set: DJSet }) {
   const [isLoading, setIsLoading] = useState(true)
   const [playableTracks, setPlayableTracks] = useState<PlayableTrack[]>([])
   const engineRef = useRef<AudioEngine | null>(null)
+  const effectsRef = useRef<DJEffects | null>(null)
   const initializedRef = useRef(false)
 
   const currentTrack = set.tracks[currentIndex]
@@ -82,11 +85,13 @@ export function PlayerClient({ set }: { set: DJSet }) {
     }
 
     engineRef.current = engine
+    effectsRef.current = new DJEffects(engine.getContext())
     initializedRef.current = true
 
     return () => {
       engine.destroy()
       engineRef.current = null
+      effectsRef.current = null
       initializedRef.current = false
     }
   }, [playableTracks])
@@ -103,6 +108,77 @@ export function PlayerClient({ set }: { set: DJSet }) {
       setIsPlaying(true)
     }
   }, [isPlaying])
+
+  const handleEffect = useCallback((effectId: string) => {
+    const effects = effectsRef.current
+    const engine = engineRef.current
+    if (!effects || !engine) return
+
+    const ctx = engine.getContext()
+    const masterGain = engine.getMasterGain()
+
+    switch (effectId) {
+      case 'siren':
+        effects.playSiren(masterGain, 1.5)
+        break
+      case 'horn':
+        effects.playSiren(masterGain, 0.5)
+        break
+      case 'rewind': {
+        const source = engine.getActiveDeckSource()
+        if (source) effects.applyRewind(source, 2)
+        break
+      }
+      case 'brake': {
+        const source = engine.getActiveDeckSource()
+        if (source) effects.applyBrake(source, 1.5)
+        break
+      }
+      case 'echo': {
+        const deck = engine.getActiveDeckPublic()
+        effects.applyEchoOut(deck, 8, 128)
+        break
+      }
+      case 'riser':
+        effects.playRiser(masterGain, 3)
+        break
+      case 'crowd': {
+        const now = ctx.currentTime
+        masterGain.gain.cancelScheduledValues(now)
+        masterGain.gain.setValueAtTime(masterGain.gain.value, now)
+        masterGain.gain.linearRampToValueAtTime(0.05, now + 0.3)
+        masterGain.gain.setValueAtTime(0.05, now + 3.3)
+        masterGain.gain.linearRampToValueAtTime(1.0, now + 4.0)
+        break
+      }
+      case 'filter': {
+        const deck = engine.getActiveDeckPublic()
+        const deckOutput = deck.getOutput()
+        const filter = ctx.createBiquadFilter()
+        filter.type = 'highpass'
+        filter.Q.value = 1
+
+        deckOutput.connect(filter)
+        filter.connect(masterGain)
+
+        const now = ctx.currentTime
+        filter.frequency.setValueAtTime(20, now)
+        filter.frequency.exponentialRampToValueAtTime(4000, now + 1)
+        filter.frequency.setValueAtTime(4000, now + 2)
+        filter.frequency.exponentialRampToValueAtTime(20, now + 3)
+
+        setTimeout(() => {
+          try {
+            deckOutput.disconnect(filter)
+            filter.disconnect()
+          } catch {
+            // nos podem ja ter sido desconectados
+          }
+        }, 3500)
+        break
+      }
+    }
+  }, [])
 
   const handleSkip = useCallback(async () => {
     const engine = engineRef.current
@@ -131,6 +207,7 @@ export function PlayerClient({ set }: { set: DJSet }) {
     newEngine.onError = (error) => console.error('[AudioEngine]', error.message)
 
     engineRef.current = newEngine
+    effectsRef.current = new DJEffects(newEngine.getContext())
     initializedRef.current = true
 
     if (isPlaying) {
@@ -205,6 +282,7 @@ export function PlayerClient({ set }: { set: DJSet }) {
           </div>
 
           <TrackProgress
+            key={currentTrack.id}
             durationMs={currentTrack.durationMs}
             isPlaying={isPlaying}
           />
@@ -218,6 +296,11 @@ export function PlayerClient({ set }: { set: DJSet }) {
               size="lg"
             />
           </div>
+
+          <EffectsPad
+            onEffect={handleEffect}
+            disabled={!isPlaying || playableTracks.length === 0}
+          />
 
           {playableTracks.length === 0 && !isLoading && (
             <div className="rounded-lg border border-yellow-800/50 bg-yellow-900/20 p-3 text-center">
