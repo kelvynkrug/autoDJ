@@ -81,7 +81,12 @@ export function PlayerBar() {
         </div>
         <VolumeControl
           volume={volume}
-          onVolumeChange={(v) => setStoreVolume(v)}
+          onVolumeChange={(v) => {
+            setStoreVolume(v)
+            if (isEngineInitialized()) {
+              getOrCreateEngine().setVolume(v)
+            }
+          }}
           className="hidden md:flex"
         />
       </div>
