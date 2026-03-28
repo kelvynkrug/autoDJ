@@ -12,7 +12,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </div>
       </main>
 
-      <PlayerBar track={null} />
+      <PlayerBar />
     </div>
   )
 }
