@@ -378,13 +378,7 @@ export function PlayerClient({ set }: { set: DJSet }) {
             </div>
           )}
 
-          {isPlaying && (
-            <div className="mx-auto w-fit rounded-full bg-violet-600/10 px-4 py-2 text-center">
-              <p className="text-xs text-violet-400">
-                Transicao em <span className="font-mono font-bold">32</span> segundos
-              </p>
-            </div>
-          )}
+          {isPlaying && nextTrack && <TransitionCountdown durationMs={currentTrack.durationMs} transitionBeats={set.transitionBeats ?? 16} />}
 
           {nextTrack && (
             <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-3">
