@@ -15,20 +15,25 @@ export async function GET(request: Request) {
       const providerToken = session.provider_token
       const providerRefreshToken = session.provider_refresh_token
 
-      if (providerToken) {
-        // Detect which provider was just authenticated by checking the most recent identity
-        const identities = session.user.identities ?? []
-        const latestIdentity = identities.sort(
-          (a, b) =>
-            new Date(b.updated_at ?? 0).getTime() - new Date(a.updated_at ?? 0).getTime()
-        )[0]
-        const providerType = (latestIdentity?.provider === 'google' ? 'google' : latestIdentity?.provider === 'spotify' ? 'spotify' : session.user.app_metadata?.provider) as 'spotify' | 'google'
+      // Detect which provider was just authenticated
+      const identities = session.user.identities ?? []
+      const latestIdentity = identities.sort(
+        (a, b) =>
+          new Date(b.updated_at ?? 0).getTime() - new Date(a.updated_at ?? 0).getTime()
+      )[0]
+      const providerType = (
+        latestIdentity?.provider === 'google' ? 'google'
+        : latestIdentity?.provider === 'spotify' ? 'spotify'
+        : session.user.app_metadata?.provider
+      ) as 'spotify' | 'google'
 
+      // Save provider token if available
+      if (providerToken) {
         await supabase.from('provider_connections').upsert(
           {
             user_id: session.user.id,
             provider: providerType,
-            provider_user_id: latestIdentity?.id ?? session.user.user_metadata?.provider_id ?? session.user.id,
+            provider_user_id: latestIdentity?.id ?? session.user.id,
             display_name: session.user.user_metadata?.full_name ?? null,
             access_token: providerToken,
             refresh_token: providerRefreshToken ?? null,
@@ -39,6 +44,12 @@ export async function GET(request: Request) {
           },
           { onConflict: 'user_id,provider' }
         )
+      } else {
+        // provider_token is null — this happens when linking a second provider
+        // Redirect to a re-auth flow that forces a fresh token
+        const redirectUrl = new URL(next, request.url)
+        redirectUrl.searchParams.set('linked', providerType)
+        return NextResponse.redirect(redirectUrl)
       }
 
       return NextResponse.redirect(new URL(next, request.url))
