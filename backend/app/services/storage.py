@@ -7,7 +7,7 @@ from app.dependencies import get_supabase_client
 
 logger = logging.getLogger(__name__)
 
-BUCKET_NAME = "audio-files"
+BUCKET_NAME = "audio"
 
 
 def upload_audio(file_path: str, storage_path: str) -> str:
