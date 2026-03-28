@@ -18,12 +18,14 @@ export class DJEffects {
    */
   applyRewind(source: AudioBufferSourceNode, duration: number): void {
     const now = this.context.currentTime
-    const endTime = now + duration
+    const halfDuration = duration / 2
 
-    // playbackRate desce de 1.0 para 0.01 (exponential não aceita 0)
     source.playbackRate.cancelScheduledValues(now)
     source.playbackRate.setValueAtTime(source.playbackRate.value, now)
-    source.playbackRate.exponentialRampToValueAtTime(0.01, endTime)
+    // Desacelera até quase parar
+    source.playbackRate.exponentialRampToValueAtTime(0.1, now + halfDuration)
+    // Volta ao normal
+    source.playbackRate.exponentialRampToValueAtTime(1.0, now + duration)
   }
 
   /**
@@ -98,7 +100,10 @@ export class DJEffects {
 
     source.playbackRate.cancelScheduledValues(now)
     source.playbackRate.setValueAtTime(source.playbackRate.value, now)
-    source.playbackRate.linearRampToValueAtTime(0.001, now + duration)
+    // Freia rápido
+    source.playbackRate.linearRampToValueAtTime(0.05, now + duration * 0.7)
+    // Volta ao normal
+    source.playbackRate.linearRampToValueAtTime(1.0, now + duration)
   }
 
   /**
