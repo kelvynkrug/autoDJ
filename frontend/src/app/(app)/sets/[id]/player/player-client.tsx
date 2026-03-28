@@ -1,13 +1,13 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { NowPlaying } from '@/components/player/now-playing'
 import { PlayerControls } from '@/components/player/player-controls'
 import { VolumeControl } from '@/components/player/volume-control'
 import { TrackProgress } from '@/components/player/track-progress'
 import { EffectsPad } from '@/components/player/effects-pad'
-import type { DJSet, SetTrack } from '@/lib/types'
+import type { DJSet, TransitionType } from '@/lib/types'
 
 function TransitionCountdown({ durationMs, transitionBeats }: { durationMs: number; transitionBeats: number }) {
   const [secondsLeft, setSecondsLeft] = useState(() => Math.floor(durationMs / 1000))
@@ -35,9 +35,16 @@ function TransitionCountdown({ durationMs, transitionBeats }: { durationMs: numb
     </div>
   )
 }
-import { AudioEngine } from '@/lib/audio/engine'
-import { DJEffects } from '@/lib/audio/effects'
+
 import type { PlayableTrack } from '@/lib/audio/types'
+import { usePlayerStore } from '@/lib/stores/player-store'
+import {
+  getOrCreateEngine,
+  getOrCreateEffects,
+  isEngineInitialized,
+  setEngineInitialized,
+  destroyEngine,
+} from '@/lib/audio/singleton'
 
 async function fetchAudioUrl(trackId: string): Promise<string | null> {
   try {
@@ -51,19 +58,25 @@ async function fetchAudioUrl(trackId: string): Promise<string | null> {
 }
 
 export function PlayerClient({ set }: { set: DJSet }) {
-  const [currentIndex, setCurrentIndex] = useState(0)
-  const [isPlaying, setIsPlaying] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
-  const [volume, setVolume] = useState(0.8)
   const [playableTracks, setPlayableTracks] = useState<PlayableTrack[]>([])
   const [pendingTrackIndex, setPendingTrackIndex] = useState<number | null>(null)
   const [showTransitionPicker, setShowTransitionPicker] = useState(false)
-  const engineRef = useRef<AudioEngine | null>(null)
-  const effectsRef = useRef<DJEffects | null>(null)
-  const initializedRef = useRef(false)
 
-  const currentTrack = set.tracks[currentIndex]
-  const nextTrack = set.tracks[currentIndex + 1]
+  const {
+    isPlaying,
+    currentTrackIndex,
+    volume,
+    activeSetId,
+    play: storePlay,
+    pause: storePause,
+    setCurrentTrackIndex,
+    setTracks: setStoreTracks,
+    setVolume: setStoreVolume,
+  } = usePlayerStore()
+
+  const currentTrack = set.tracks[currentTrackIndex]
+  const nextTrack = set.tracks[currentTrackIndex + 1]
 
   // Buscar audio URLs para todas as tracks ready
   useEffect(() => {
@@ -95,54 +108,68 @@ export function PlayerClient({ set }: { set: DJSet }) {
     return () => { cancelled = true }
   }, [set.tracks])
 
-  // Inicializar AudioEngine quando tracks estiverem prontas
+  // Inicializar AudioEngine via singleton
   useEffect(() => {
-    if (playableTracks.length === 0 || initializedRef.current) return
+    if (playableTracks.length === 0) return
 
-    const engine = new AudioEngine()
+    // Se o engine ja esta inicializado para este mesmo set, so sincronizar estado
+    if (isEngineInitialized() && activeSetId === set.id) {
+      const engine = getOrCreateEngine()
+      if (engine.isPlaying) {
+        storePlay()
+      }
+      return
+    }
+
+    // Set diferente ou primeira vez: destruir o anterior e criar novo
+    if (isEngineInitialized() && activeSetId !== set.id) {
+      destroyEngine()
+    }
+
+    const engine = getOrCreateEngine()
     engine.setTracks(playableTracks)
 
     engine.onTrackChange = (index) => {
-      setCurrentIndex(index)
+      setCurrentTrackIndex(index)
     }
 
     engine.onSetEnd = () => {
-      setIsPlaying(false)
+      storePause()
     }
 
     engine.onError = (error) => {
       console.error('[AudioEngine]', error.message)
     }
 
-    engineRef.current = engine
-    effectsRef.current = new DJEffects(engine.getContext())
-    initializedRef.current = true
+    setStoreTracks(set.tracks, set.id)
+    setEngineInitialized(true)
 
-    return () => {
-      engine.destroy()
-      engineRef.current = null
-      effectsRef.current = null
-      initializedRef.current = false
-    }
-  }, [playableTracks])
+    // NAO destruir no cleanup — o singleton sobrevive a re-renders
+  }, [playableTracks, set.id, set.tracks, activeSetId, storePlay, storePause, setCurrentTrackIndex, setStoreTracks])
+
+  // Sincronizar volume com engine
+  useEffect(() => {
+    if (!isEngineInitialized()) return
+    const engine = getOrCreateEngine()
+    engine.setVolume(volume)
+  }, [volume])
 
   const handleToggle = useCallback(async () => {
-    const engine = engineRef.current
-    if (!engine) return
+    const engine = getOrCreateEngine()
 
     if (isPlaying) {
       engine.pause()
-      setIsPlaying(false)
+      storePause()
     } else {
       await engine.play()
-      setIsPlaying(true)
+      storePlay()
     }
-  }, [isPlaying])
+  }, [isPlaying, storePlay, storePause])
 
   const handleEffect = useCallback((effectId: string) => {
-    const effects = effectsRef.current
-    const engine = engineRef.current
-    if (!effects || !engine) return
+    const effects = getOrCreateEffects()
+    const engine = getOrCreateEngine()
+    if (!effects) return
 
     const ctx = engine.getContext()
     const masterGain = engine.getMasterGain()
@@ -164,7 +191,7 @@ export function PlayerClient({ set }: { set: DJSet }) {
         if (source) {
           effects.applyBrake(source, 1.5)
           setTimeout(() => {
-            setIsPlaying(false)
+            storePause()
           }, 1500)
         }
         break
@@ -213,45 +240,40 @@ export function PlayerClient({ set }: { set: DJSet }) {
         break
       }
     }
-  }, [])
+  }, [storePause])
 
   const handleSkip = useCallback(async () => {
-    const engine = engineRef.current
-    if (!engine) return
-
+    const engine = getOrCreateEngine()
     await engine.skip()
   }, [])
 
   const handleTrackSelect = useCallback(async (index: number) => {
-    setCurrentIndex(index)
-    // O AudioEngine nao suporta seek direto por index, entao resetamos
-    const engine = engineRef.current
-    if (!engine || playableTracks.length === 0) return
+    setCurrentTrackIndex(index)
 
-    engine.destroy()
-    initializedRef.current = false
+    if (playableTracks.length === 0) return
+
+    // Destroi e recria o engine para o novo ponto de partida
+    destroyEngine()
 
     const slicedTracks = playableTracks.slice(index)
-    const newEngine = new AudioEngine()
-    newEngine.setTracks(slicedTracks)
+    const engine = getOrCreateEngine()
+    engine.setTracks(slicedTracks)
 
-    newEngine.onTrackChange = (i) => {
-      setCurrentIndex(index + i)
+    engine.onTrackChange = (i) => {
+      setCurrentTrackIndex(index + i)
     }
-    newEngine.onSetEnd = () => setIsPlaying(false)
-    newEngine.onError = (error) => console.error('[AudioEngine]', error.message)
+    engine.onSetEnd = () => storePause()
+    engine.onError = (error) => console.error('[AudioEngine]', error.message)
 
-    engineRef.current = newEngine
-    effectsRef.current = new DJEffects(newEngine.getContext())
-    initializedRef.current = true
+    setEngineInitialized(true)
 
     if (isPlaying) {
-      await newEngine.play()
+      await engine.play()
     }
-  }, [playableTracks, isPlaying])
+  }, [playableTracks, isPlaying, setCurrentTrackIndex, storePause])
 
   const handleTrackClick = useCallback((index: number) => {
-    if (index === currentIndex) return
+    if (index === currentTrackIndex) return
 
     if (!isPlaying) {
       handleTrackSelect(index)
@@ -260,7 +282,7 @@ export function PlayerClient({ set }: { set: DJSet }) {
 
     setPendingTrackIndex(index)
     setShowTransitionPicker(true)
-  }, [isPlaying, currentIndex, handleTrackSelect])
+  }, [isPlaying, currentTrackIndex, handleTrackSelect])
 
   const handleTransitionChoice = useCallback(async (transitionType: string) => {
     setShowTransitionPicker(false)
@@ -273,14 +295,13 @@ export function PlayerClient({ set }: { set: DJSet }) {
       return
     }
 
-    const engine = engineRef.current
-    if (!engine) {
+    const engine = getOrCreateEngine()
+    if (!isEngineInitialized()) {
       await handleTrackSelect(pendingTrackIndex)
       setPendingTrackIndex(null)
       return
     }
 
-    // Encontra o índice relativo dentro das playableTracks
     const targetPlayableIndex = playableTracks.findIndex(
       (t) => t.id === set.tracks[pendingTrackIndex]?.id,
     )
@@ -294,7 +315,7 @@ export function PlayerClient({ set }: { set: DJSet }) {
     try {
       await engine.skipToWithTransition(targetPlayableIndex, transitionType as TransitionType)
     } catch (error) {
-      console.error('[PlayerClient] Falha na transição:', error)
+      console.error('[PlayerClient] Falha na transicao:', error)
       await handleTrackSelect(pendingTrackIndex)
     }
 
@@ -372,7 +393,9 @@ export function PlayerClient({ set }: { set: DJSet }) {
             durationMs={currentTrack.durationMs}
             isPlaying={isPlaying}
             onSeek={(ms) => {
-              engineRef.current?.seek(ms / 1000)
+              if (!isEngineInitialized()) return
+              const engine = getOrCreateEngine()
+              engine.seek(ms / 1000)
             }}
           />
 
@@ -380,8 +403,7 @@ export function PlayerClient({ set }: { set: DJSet }) {
             <VolumeControl
               volume={volume}
               onVolumeChange={(v) => {
-                setVolume(v)
-                engineRef.current?.setVolume(v)
+                setStoreVolume(v)
               }}
             />
             <PlayerControls
@@ -422,7 +444,7 @@ export function PlayerClient({ set }: { set: DJSet }) {
         </h3>
         <div className="space-y-1">
           {set.tracks.map((track, i) => {
-            const isCurrent = i === currentIndex
+            const isCurrent = i === currentTrackIndex
             return (
               <button
                 key={track.id}

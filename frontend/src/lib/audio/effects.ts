@@ -156,6 +156,59 @@ export class DJEffects {
   }
 
   /**
+   * Air Horn: tom grave e potente, curto e repetido (bwaaa bwaa bwaa).
+   * Diferente da sirene — é mais grave, mais curto e mais agressivo.
+   */
+  playAirHorn(destination: AudioNode, blasts: number = 3): void {
+    const ctx = this.context
+    const now = ctx.currentTime
+    const blastDuration = 0.15
+    const gap = 0.1
+    const totalDuration = blasts * (blastDuration + gap)
+
+    for (let i = 0; i < blasts; i++) {
+      const start = now + i * (blastDuration + gap)
+
+      // Oscilador principal — tom grave
+      const osc1 = ctx.createOscillator()
+      osc1.type = 'square'
+      osc1.frequency.setValueAtTime(220, start)
+      osc1.frequency.linearRampToValueAtTime(180, start + blastDuration)
+
+      // Segundo oscilador — harmônico
+      const osc2 = ctx.createOscillator()
+      osc2.type = 'sawtooth'
+      osc2.frequency.setValueAtTime(440, start)
+      osc2.frequency.linearRampToValueAtTime(360, start + blastDuration)
+
+      const gain = ctx.createGain()
+      gain.gain.setValueAtTime(0.7, start)
+      gain.gain.linearRampToValueAtTime(0, start + blastDuration)
+
+      const gain2 = ctx.createGain()
+      gain2.gain.setValueAtTime(0.3, start)
+      gain2.gain.linearRampToValueAtTime(0, start + blastDuration)
+
+      osc1.connect(gain)
+      osc2.connect(gain2)
+      gain.connect(ctx.destination)
+      gain2.connect(ctx.destination)
+
+      osc1.start(start)
+      osc1.stop(start + blastDuration)
+      osc2.start(start)
+      osc2.stop(start + blastDuration)
+
+      setTimeout(() => {
+        osc1.disconnect()
+        osc2.disconnect()
+        gain.disconnect()
+        gain2.disconnect()
+      }, (start - now + blastDuration + 0.5) * 1000)
+    }
+  }
+
+  /**
    * Riser (White Noise Build): ruído branco que cresce em volume antes do drop.
    * Usa bandpass filter para focar o ruído em frequências médio-altas.
    *

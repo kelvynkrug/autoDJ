@@ -1,20 +1,51 @@
 'use client'
 
-import { useState } from 'react'
+import { useCallback } from 'react'
 import { NowPlaying } from './now-playing'
 import { PlayerControls } from './player-controls'
 import { VolumeControl } from './volume-control'
 import { TrackProgress } from './track-progress'
-import type { Track } from '@/lib/types'
+import { usePlayerStore } from '@/lib/stores/player-store'
+import {
+  getOrCreateEngine,
+  isEngineInitialized,
+} from '@/lib/audio/singleton'
 
-interface PlayerBarProps {
-  track: Track | null
-}
+export function PlayerBar() {
+  const {
+    isPlaying,
+    currentTrackIndex,
+    tracks,
+    volume,
+    play: storePlay,
+    pause: storePause,
+    setVolume: setStoreVolume,
+  } = usePlayerStore()
 
-export function PlayerBar({ track }: PlayerBarProps) {
-  const [isPlaying, setIsPlaying] = useState(false)
+  const track = tracks[currentTrackIndex]
 
-  if (!track) return null
+  const handleToggle = useCallback(async () => {
+    if (!isEngineInitialized()) return
+
+    const engine = getOrCreateEngine()
+
+    if (isPlaying) {
+      engine.pause()
+      storePause()
+    } else {
+      await engine.play()
+      storePlay()
+    }
+  }, [isPlaying, storePlay, storePause])
+
+  const handleSkip = useCallback(async () => {
+    if (!isEngineInitialized()) return
+
+    const engine = getOrCreateEngine()
+    await engine.skip()
+  }, [])
+
+  if (!track || !isEngineInitialized()) return null
 
   return (
     <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-zinc-800 bg-zinc-950/95 backdrop-blur-xl">
@@ -27,10 +58,14 @@ export function PlayerBar({ track }: PlayerBarProps) {
         <NowPlaying track={track} size="sm" />
         <PlayerControls
           isPlaying={isPlaying}
-          onToggle={() => setIsPlaying(!isPlaying)}
-          onSkip={() => {}}
+          onToggle={handleToggle}
+          onSkip={handleSkip}
         />
-        <VolumeControl className="hidden md:flex" />
+        <VolumeControl
+          volume={volume}
+          onVolumeChange={(v) => setStoreVolume(v)}
+          className="hidden md:flex"
+        />
       </div>
     </div>
   )
