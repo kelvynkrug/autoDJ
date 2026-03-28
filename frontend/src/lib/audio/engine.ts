@@ -169,30 +169,37 @@ export class AudioEngine {
 
   /**
    * Pula para uma faixa específica com um tipo de transição escolhido manualmente.
-   * Reordena internamente as tracks para que a faixa destino fique na posição seguinte.
+   * Carrega a faixa destino no deck inativo e executa a transição diretamente,
+   * sem reorganizar a lista de tracks.
    */
   async skipToWithTransition(targetIndex: number, transitionType: TransitionType): Promise<void> {
     if (this.isTransitioning) return
     if (targetIndex < 0 || targetIndex >= this.tracks.length) return
     if (targetIndex === this.currentIndex) return
 
-    // Reorganiza as tracks: mantém a atual, coloca a destino como próxima, depois as restantes
-    const currentTrack = this.tracks[this.currentIndex]
-    const targetTrack = this.tracks[targetIndex]
-    const remaining = this.tracks.filter((_, i) => i !== this.currentIndex && i !== targetIndex)
-
-    // Tracks após o target na ordem original
-    const afterTarget = this.tracks.filter((_, i) => i > targetIndex && i !== this.currentIndex)
-    const beforeTarget = this.tracks.filter((_, i) => i > this.currentIndex && i < targetIndex)
-
-    this.tracks = [currentTrack, targetTrack, ...beforeTarget, ...afterTarget]
-    this.currentIndex = 0
-
-    // Reseta preload pois a ordem mudou
     this.preloadScheduled = false
     this.transitionScheduled = false
 
-    await this.executeTransition(transitionType)
+    await this.executeTransitionTo(targetIndex, transitionType)
+  }
+
+  /**
+   * Pula para uma faixa sem transição (corte direto).
+   * Para o deck atual, reseta estado e prepara para play na nova posição.
+   */
+  jumpTo(targetIndex: number): void {
+    if (targetIndex < 0 || targetIndex >= this.tracks.length) return
+
+    this.getActiveDeck().stop()
+    this.getInactiveDeck().stop()
+    this.getActiveDeck().clearBuffer()
+    this.getInactiveDeck().clearBuffer()
+
+    this.currentIndex = targetIndex
+    this.transitionScheduled = false
+    this.preloadScheduled = false
+    this._isPlaying = false
+    this.stopTick()
   }
 
   /**
@@ -369,6 +376,73 @@ export class AudioEngine {
     })
   }
 
+  /**
+   * Executa transição para uma faixa em qualquer posição da lista.
+   * Usado por skipToWithTransition para pular para uma faixa específica.
+   */
+  private async executeTransitionTo(targetIndex: number, type: TransitionType): Promise<void> {
+    if (this.isTransitioning) return
+
+    this.isTransitioning = true
+    const fromIndex = this.currentIndex
+    const toIndex = targetIndex
+
+    if (toIndex < 0 || toIndex >= this.tracks.length) {
+      this.isTransitioning = false
+      return
+    }
+
+    const fromDeck = this.getActiveDeck()
+    const toDeck = this.getInactiveDeck()
+    const nextTrack = this.tracks[toIndex]
+    const currentTrack = this.tracks[fromIndex]
+
+    // Sempre carrega a track destino pois pode ser qualquer posicao
+    try {
+      await this.loadTrack(toDeck, nextTrack)
+    } catch (error) {
+      this.isTransitioning = false
+      this.onError?.(new Error(`Falha ao carregar "${nextTrack.title}": ${(error as Error).message}`))
+      return
+    }
+
+    this.onTransitionStart?.(fromIndex, toIndex)
+
+    const bpm = currentTrack.analysis?.bpm ?? 120
+    const config = {
+      durationBeats: 16,
+      bpm,
+    }
+
+    try {
+      await this.applyTransitionEffect(type, fromDeck, toDeck, config)
+    } catch (error) {
+      this.onError?.(error as Error)
+    }
+
+    this.activeDeck = this.activeDeck === 'A' ? 'B' : 'A'
+    this.currentIndex = toIndex
+    this.transitionScheduled = false
+    this.preloadScheduled = false
+    this.isTransitioning = false
+
+    this.onTrackChange?.(this.currentIndex, this.tracks[this.currentIndex])
+
+    if (this.currentIndex >= this.tracks.length - 1) {
+      const deck = this.getActiveDeck()
+      const remaining = deck.getDuration() - deck.getCurrentTime()
+      if (remaining > 0) {
+        setTimeout(() => {
+          if (!this.isTransitioning) {
+            this._isPlaying = false
+            this.stopTick()
+            this.onSetEnd?.()
+          }
+        }, remaining * 1000)
+      }
+    }
+  }
+
   private async executeTransition(type: TransitionType): Promise<void> {
     if (this.isTransitioning) return
 
@@ -410,29 +484,7 @@ export class AudioEngine {
     }
 
     try {
-      switch (type) {
-        case 'crossfade':
-          await crossfadeTransition(fromDeck, toDeck, this.crossfader, config)
-          break
-        case 'eq_swap':
-          await eqSwapTransition(fromDeck, toDeck, this.crossfader, config)
-          break
-        case 'filter_sweep':
-          await filterSweepTransition(fromDeck, toDeck, this.crossfader, config)
-          break
-        case 'rewind':
-          await rewindTransition(fromDeck, toDeck, this.crossfader, config)
-          break
-        case 'buildup_drop':
-          await buildupDropTransition(fromDeck, toDeck, this.crossfader, config)
-          break
-        case 'echo_out':
-          await echoOutTransition(fromDeck, toDeck, this.crossfader, config)
-          break
-        case 'brake':
-          await brakeTransition(fromDeck, toDeck, this.crossfader, config)
-          break
-      }
+      await this.applyTransitionEffect(type, fromDeck, toDeck, config)
     } catch (error) {
       this.onError?.(error as Error)
     }
@@ -459,6 +511,40 @@ export class AudioEngine {
           }
         }, remaining * 1000)
       }
+    }
+  }
+
+  /**
+   * Aplica o efeito de transição entre dois decks.
+   */
+  private async applyTransitionEffect(
+    type: TransitionType,
+    fromDeck: Deck,
+    toDeck: Deck,
+    config: { durationBeats: number; bpm: number },
+  ): Promise<void> {
+    switch (type) {
+      case 'crossfade':
+        await crossfadeTransition(fromDeck, toDeck, this.crossfader, config)
+        break
+      case 'eq_swap':
+        await eqSwapTransition(fromDeck, toDeck, this.crossfader, config)
+        break
+      case 'filter_sweep':
+        await filterSweepTransition(fromDeck, toDeck, this.crossfader, config)
+        break
+      case 'rewind':
+        await rewindTransition(fromDeck, toDeck, this.crossfader, config)
+        break
+      case 'buildup_drop':
+        await buildupDropTransition(fromDeck, toDeck, this.crossfader, config)
+        break
+      case 'echo_out':
+        await echoOutTransition(fromDeck, toDeck, this.crossfader, config)
+        break
+      case 'brake':
+        await brakeTransition(fromDeck, toDeck, this.crossfader, config)
+        break
     }
   }
 

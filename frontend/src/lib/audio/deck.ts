@@ -150,6 +150,12 @@ export class Deck {
     return this.buffer
   }
 
+  /** Limpa o buffer carregado, forçando reload no próximo play. */
+  clearBuffer(): void {
+    this.buffer = null
+    this.pauseOffset = 0
+  }
+
   /** Indica se o deck está reproduzindo. */
   isActive(): boolean {
     return this._isPlaying

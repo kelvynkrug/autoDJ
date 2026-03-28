@@ -77,6 +77,20 @@ export function PlayerClient({ set }: { set: DJSet }) {
     setVolume: setStoreVolume,
   } = usePlayerStore()
 
+  // Mapeamento: indice do engine (playableTracks) -> indice do set.tracks
+  const playableToSetIndex = useCallback((playableIdx: number): number => {
+    if (playableIdx < 0 || playableIdx >= playableTracks.length) return playableIdx
+    const playableTrack = playableTracks[playableIdx]
+    return set.tracks.findIndex((t) => t.id === playableTrack.id)
+  }, [playableTracks, set.tracks])
+
+  // Mapeamento: indice do set.tracks -> indice do engine (playableTracks)
+  const setToPlayableIndex = useCallback((setIdx: number): number => {
+    const track = set.tracks[setIdx]
+    if (!track) return -1
+    return playableTracks.findIndex((t) => t.id === track.id)
+  }, [playableTracks, set.tracks])
+
   const currentTrack = set.tracks[currentTrackIndex]
   const nextTrack = set.tracks[currentTrackIndex + 1]
 
@@ -131,8 +145,9 @@ export function PlayerClient({ set }: { set: DJSet }) {
     const engine = getOrCreateEngine()
     engine.setTracks(playableTracks)
 
-    engine.onTrackChange = (index) => {
-      setCurrentTrackIndex(index)
+    engine.onTrackChange = (engineIndex) => {
+      const setIdx = playableToSetIndex(engineIndex)
+      setCurrentTrackIndex(setIdx >= 0 ? setIdx : engineIndex)
       setCurrentTimeMs(0)
     }
 
@@ -272,35 +287,42 @@ export function PlayerClient({ set }: { set: DJSet }) {
   }, [storePause, currentTrack])
 
   const handleSkip = useCallback(async () => {
+    if (!isEngineInitialized()) return
     const engine = getOrCreateEngine()
     await engine.skip()
   }, [])
 
   const handleTrackSelect = useCallback(async (index: number) => {
-    setCurrentTrackIndex(index)
-
     if (playableTracks.length === 0) return
 
-    // Destroi e recria o engine para o novo ponto de partida
-    destroyEngine()
+    const playableIdx = setToPlayableIndex(index)
+    if (playableIdx === -1) return
 
-    const slicedTracks = playableTracks.slice(index)
-    const engine = getOrCreateEngine()
-    engine.setTracks(slicedTracks)
-
-    engine.onTrackChange = (i) => {
-      setCurrentTrackIndex(index + i)
-      setCurrentTimeMs(0)
+    if (!isEngineInitialized()) {
+      // Engine nao inicializado: configura e inicia do indice escolhido
+      const engine = getOrCreateEngine()
+      engine.setTracks(playableTracks)
+      engine.onTrackChange = (engineIndex) => {
+        const setIdx = playableToSetIndex(engineIndex)
+        setCurrentTrackIndex(setIdx >= 0 ? setIdx : engineIndex)
+        setCurrentTimeMs(0)
+      }
+      engine.onSetEnd = () => storePause()
+      engine.onError = (error) => console.error('[AudioEngine]', error.message)
+      setEngineInitialized(true)
     }
-    engine.onSetEnd = () => storePause()
-    engine.onError = (error) => console.error('[AudioEngine]', error.message)
 
-    setEngineInitialized(true)
+    const engine = getOrCreateEngine()
+
+    // Para o deck atual e pula direto para a track escolhida
+    engine.jumpTo(playableIdx)
+    setCurrentTrackIndex(index)
+    setCurrentTimeMs(0)
 
     if (isPlaying) {
       await engine.play()
     }
-  }, [playableTracks, isPlaying, setCurrentTrackIndex, storePause])
+  }, [playableTracks, isPlaying, setCurrentTrackIndex, storePause, setToPlayableIndex, playableToSetIndex])
 
   const handleTrackClick = useCallback((index: number) => {
     if (index === currentTrackIndex) return
