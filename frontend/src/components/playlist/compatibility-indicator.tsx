@@ -4,6 +4,8 @@ interface CompatibilityIndicatorProps {
 }
 
 export function CompatibilityIndicator({ score, className = '' }: CompatibilityIndicatorProps) {
+  if (score <= 0) return null
+
   const getColor = () => {
     if (score >= 0.8) return 'from-emerald-500 to-emerald-400'
     if (score >= 0.6) return 'from-amber-500 to-yellow-400'

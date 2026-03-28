@@ -1,5 +1,6 @@
 import type { Deck } from './deck'
 import type { CrossfaderNode } from './crossfader'
+import { DJEffects } from './effects'
 import { beatsToSeconds } from './utils'
 
 export interface TransitionConfig {

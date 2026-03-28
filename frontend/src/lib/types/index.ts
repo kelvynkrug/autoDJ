@@ -10,7 +10,7 @@ export type TrackStatus =
 
 export type SetStatus = 'draft' | 'ready' | 'playing' | 'paused' | 'finished'
 
-export type TransitionType = 'crossfade' | 'eq_swap' | 'filter_sweep'
+export type TransitionType = 'crossfade' | 'eq_swap' | 'filter_sweep' | 'rewind' | 'buildup_drop' | 'echo_out' | 'brake'
 
 export type CamelotKey =
   | '1A' | '1B'
