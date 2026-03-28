@@ -1,70 +1,19 @@
 import { NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/supabase/auth-guard'
-import { createServerClient } from '@/lib/supabase/server'
+import { getProviderToken } from '@/lib/supabase/provider-token'
 import type { Provider } from '@/lib/types'
 
 interface SpotifyPlaylist {
   id: string
   name: string
   images: { url: string }[]
-  tracks: { total: number }
+  tracks: { href: string; total: number } | null
 }
 
 interface YouTubePlaylist {
   id: string
   snippet: { title: string; thumbnails: { default: { url: string } } }
   contentDetails: { itemCount: number }
-}
-
-async function refreshSpotifyToken(refreshToken: string): Promise<{ access_token: string; expires_in: number } | null> {
-  const res = await fetch('https://accounts.spotify.com/api/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      grant_type: 'refresh_token',
-      refresh_token: refreshToken,
-      client_id: process.env.NEXT_PUBLIC_SPOTIFY_CLIENT_ID ?? '641dd6eeedd3443e86ac198de2eadf28',
-      client_secret: process.env.SPOTIFY_CLIENT_SECRET ?? '91756e9a108d4617ad9d5309729892ad',
-    }),
-  })
-
-  if (!res.ok) return null
-  return res.json()
-}
-
-async function getProviderToken(userId: string, provider: 'spotify' | 'google'): Promise<string | null> {
-  const supabase = await createServerClient()
-
-  const { data: conn } = await supabase
-    .from('provider_connections')
-    .select('access_token, refresh_token, token_expires_at')
-    .eq('user_id', userId)
-    .eq('provider', provider)
-    .single()
-
-  if (!conn) return null
-
-  const isExpired = conn.token_expires_at && new Date(conn.token_expires_at) < new Date()
-
-  if (!isExpired) return conn.access_token
-
-  if (provider === 'spotify' && conn.refresh_token) {
-    const refreshed = await refreshSpotifyToken(conn.refresh_token)
-    if (refreshed) {
-      await supabase
-        .from('provider_connections')
-        .update({
-          access_token: refreshed.access_token,
-          token_expires_at: new Date(Date.now() + refreshed.expires_in * 1000).toISOString(),
-        })
-        .eq('user_id', userId)
-        .eq('provider', provider)
-
-      return refreshed.access_token
-    }
-  }
-
-  return null
 }
 
 async function fetchSpotifyPlaylists(token: string) {
@@ -81,17 +30,19 @@ async function fetchSpotifyPlaylists(token: string) {
       throw new Error(`Spotify API ${res.status}: ${body}`)
     }
 
-    const data: { items: SpotifyPlaylist[]; next: string | null } = await res.json()
-    items.push(...(data.items ?? []))
-    url = data.next
+    const data = await res.json()
+    if (data.items) {
+      items.push(...data.items)
+    }
+    url = data.next ?? null
   }
 
   return items
-    .filter((p) => p && p.id && p.name)
-    .map((p) => ({
+    .filter((p: SpotifyPlaylist) => p && p.id && p.name)
+    .map((p: SpotifyPlaylist) => ({
       id: p.id,
       name: p.name,
-      trackCount: p.tracks?.total ?? 0,
+      trackCount: typeof p.tracks === 'object' && p.tracks !== null ? p.tracks.total : 0,
       provider: 'spotify' as const,
       coverUrl: p.images?.[0]?.url ?? null,
     }))
@@ -148,10 +99,11 @@ export async function GET(
     )
   }
 
+  const providerName = provider === 'spotify' ? 'Spotify' : 'YouTube'
   const providerToken = await getProviderToken(auth.auth.user.id, provider)
   if (!providerToken) {
     return NextResponse.json(
-      { error: { code: 'NO_PROVIDER_TOKEN', message: 'Token do provider expirado. Reconecte sua conta no Dashboard.' } },
+      { error: { code: 'NO_PROVIDER_TOKEN', message: `Token do ${providerName} expirado. Reconecte sua conta.` } },
       { status: 401 },
     )
   }

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/supabase/auth-guard'
 import { createServerClient } from '@/lib/supabase/server'
+import { getProviderToken } from '@/lib/supabase/provider-token'
 import { BACKEND_URL } from '@/lib/constants'
 import type { Provider } from '@/lib/types'
 
@@ -100,10 +101,11 @@ export async function POST(request: Request) {
     name?: string
   }
 
-  const providerToken = auth.auth.session.provider_token
+  const providerName = provider === 'spotify' ? 'Spotify' : 'YouTube'
+  const providerToken = await getProviderToken(auth.auth.user.id, provider)
   if (!providerToken) {
     return NextResponse.json(
-      { error: { code: 'NO_PROVIDER_TOKEN', message: 'Token do provider nao disponivel' } },
+      { error: { code: 'NO_PROVIDER_TOKEN', message: `Token do ${providerName} expirado. Reconecte sua conta.` } },
       { status: 401 },
     )
   }
@@ -138,25 +140,45 @@ export async function POST(request: Request) {
       )
     }
 
-    const tracksToInsert = providerTracks.map((t, index) => ({
-      playlist_id: playlist.id,
-      provider_track_id: t.provider_track_id,
+    // Insert tracks
+    const tracksToInsert = providerTracks.map((t) => ({
+      user_id: auth.auth.user.id,
       title: t.title,
       artist: t.artist,
-      album: t.album,
+      album: t.album || null,
       duration_ms: t.duration_ms,
       cover_url: t.cover_url,
-      position: index,
+      spotify_id: provider === 'spotify' ? t.provider_track_id : null,
+      youtube_id: provider === 'google' ? t.provider_track_id : null,
       status: 'pending' as const,
     }))
 
-    const { error: tracksError } = await supabase
+    const { data: insertedTracks, error: tracksError } = await supabase
       .from('tracks')
       .insert(tracksToInsert)
+      .select('id')
 
-    if (tracksError) {
+    if (tracksError || !insertedTracks) {
       return NextResponse.json(
-        { error: { code: 'DB_ERROR', message: tracksError.message } },
+        { error: { code: 'DB_ERROR', message: tracksError?.message ?? 'Erro ao inserir tracks' } },
+        { status: 500 },
+      )
+    }
+
+    // Insert playlist_tracks (junction)
+    const playlistTracks = insertedTracks.map((t: { id: string }, index: number) => ({
+      playlist_id: playlist.id,
+      track_id: t.id,
+      position: index,
+    }))
+
+    const { error: junctionError } = await supabase
+      .from('playlist_tracks')
+      .insert(playlistTracks)
+
+    if (junctionError) {
+      return NextResponse.json(
+        { error: { code: 'DB_ERROR', message: junctionError.message } },
         { status: 500 },
       )
     }

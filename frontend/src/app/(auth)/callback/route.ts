@@ -16,14 +16,19 @@ export async function GET(request: Request) {
       const providerRefreshToken = session.provider_refresh_token
 
       if (providerToken) {
-        const provider = session.user.app_metadata?.provider as string
-        const providerType = provider === 'google' ? 'google' : 'spotify'
+        // Detect which provider was just authenticated by checking the most recent identity
+        const identities = session.user.identities ?? []
+        const latestIdentity = identities.sort(
+          (a: { updated_at: string }, b: { updated_at: string }) =>
+            new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+        )[0]
+        const providerType = (latestIdentity?.provider === 'google' ? 'google' : latestIdentity?.provider === 'spotify' ? 'spotify' : session.user.app_metadata?.provider) as 'spotify' | 'google'
 
         await supabase.from('provider_connections').upsert(
           {
             user_id: session.user.id,
             provider: providerType,
-            provider_user_id: session.user.user_metadata?.provider_id ?? session.user.id,
+            provider_user_id: latestIdentity?.id ?? session.user.user_metadata?.provider_id ?? session.user.id,
             display_name: session.user.user_metadata?.full_name ?? null,
             access_token: providerToken,
             refresh_token: providerRefreshToken ?? null,

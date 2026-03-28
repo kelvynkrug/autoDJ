@@ -112,6 +112,21 @@ export default function PlaylistsPage() {
     }
   }
 
+  async function handleReconnect(provider: 'spotify' | 'google') {
+    const scopes: Record<string, string> = {
+      spotify: 'playlist-read-private playlist-read-collaborative user-library-read',
+      google: 'https://www.googleapis.com/auth/youtube.readonly',
+    }
+
+    await supabase.auth.signInWithOAuth({
+      provider,
+      options: {
+        redirectTo: `${window.location.origin}/callback?next=/playlists`,
+        scopes: scopes[provider],
+      },
+    })
+  }
+
   const tabs: { key: Tab; label: string; provider?: string }[] = [
     { key: 'mine', label: 'Minhas Playlists' },
     { key: 'spotify', label: 'Importar do Spotify', provider: 'spotify' },
@@ -152,11 +167,21 @@ export default function PlaylistsPage() {
       </div>
 
       {error && (
-        <div className="rounded-lg border border-red-500/20 bg-red-500/5 px-4 py-3 text-sm text-red-400">
-          {error}
-          <button onClick={() => setError(null)} className="ml-2 underline">
-            fechar
-          </button>
+        <div className="flex items-center justify-between rounded-lg border border-red-500/20 bg-red-500/5 px-4 py-3 text-sm text-red-400">
+          <span>{error}</span>
+          <div className="flex items-center gap-3 shrink-0">
+            {error.includes('expirado') || error.includes('Token') ? (
+              <button
+                onClick={() => handleReconnect(tab === 'youtube' ? 'google' : 'spotify')}
+                className="rounded-md bg-violet-600 px-3 py-1 text-xs font-medium text-white hover:bg-violet-500"
+              >
+                Reconectar
+              </button>
+            ) : null}
+            <button onClick={() => setError(null)} className="underline">
+              fechar
+            </button>
+          </div>
         </div>
       )}
 
