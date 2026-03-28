@@ -7,7 +7,34 @@ import { PlayerControls } from '@/components/player/player-controls'
 import { VolumeControl } from '@/components/player/volume-control'
 import { TrackProgress } from '@/components/player/track-progress'
 import { EffectsPad } from '@/components/player/effects-pad'
-import type { DJSet, SetTrack, TransitionType } from '@/lib/types'
+import type { DJSet, SetTrack } from '@/lib/types'
+
+function TransitionCountdown({ durationMs, transitionBeats }: { durationMs: number; transitionBeats: number }) {
+  const [secondsLeft, setSecondsLeft] = useState(() => Math.floor(durationMs / 1000))
+
+  useEffect(() => {
+    setSecondsLeft(Math.floor(durationMs / 1000))
+  }, [durationMs])
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setSecondsLeft((prev) => (prev > 0 ? prev - 1 : 0))
+    }, 1000)
+    return () => clearInterval(interval)
+  }, [])
+
+  if (secondsLeft <= 0) return null
+
+  const isClose = secondsLeft <= 30
+
+  return (
+    <div className={`mx-auto w-fit rounded-full px-4 py-2 text-center ${isClose ? 'bg-violet-600/20 animate-pulse' : 'bg-violet-600/10'}`}>
+      <p className="text-xs text-violet-400">
+        Transicao em <span className="font-mono font-bold">{secondsLeft}</span> segundos
+      </p>
+    </div>
+  )
+}
 import { AudioEngine } from '@/lib/audio/engine'
 import { DJEffects } from '@/lib/audio/effects'
 import type { PlayableTrack } from '@/lib/audio/types'
