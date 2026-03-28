@@ -16,25 +16,25 @@ export class DJEffects {
    * Rewind/Backspin: reduz playback rate rapidamente com highpass crescente.
    * Simula o som de rebobinar um disco de vinil.
    */
-  applyRewind(source: AudioBufferSourceNode, duration: number): void {
+  applyRewind(source: AudioBufferSourceNode, duration: number = 1.5): void {
     const now = this.context.currentTime
 
-    // Desacelera até quase parar (efeito rebobinar)
+    // 1.5s desacelera
     source.playbackRate.cancelScheduledValues(now)
     source.playbackRate.setValueAtTime(source.playbackRate.value, now)
     source.playbackRate.exponentialRampToValueAtTime(0.1, now + duration)
 
-    // Pausa no final do efeito
+    // Pausa breve
     setTimeout(() => {
       source.playbackRate.cancelScheduledValues(this.context.currentTime)
       source.playbackRate.setValueAtTime(0.001, this.context.currentTime)
     }, duration * 1000)
 
-    // Retoma após 2 segundos de pausa
+    // Retoma após 0.5s de pausa (total ~2-3s)
     setTimeout(() => {
       source.playbackRate.cancelScheduledValues(this.context.currentTime)
       source.playbackRate.setValueAtTime(1.0, this.context.currentTime)
-    }, (duration + 2) * 1000)
+    }, (duration + 0.5) * 1000)
   }
 
   /**
