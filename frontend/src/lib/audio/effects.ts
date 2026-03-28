@@ -18,14 +18,23 @@ export class DJEffects {
    */
   applyRewind(source: AudioBufferSourceNode, duration: number): void {
     const now = this.context.currentTime
-    const halfDuration = duration / 2
 
+    // Desacelera até quase parar (efeito rebobinar)
     source.playbackRate.cancelScheduledValues(now)
     source.playbackRate.setValueAtTime(source.playbackRate.value, now)
-    // Desacelera até quase parar
-    source.playbackRate.exponentialRampToValueAtTime(0.1, now + halfDuration)
-    // Volta ao normal
-    source.playbackRate.exponentialRampToValueAtTime(1.0, now + duration)
+    source.playbackRate.exponentialRampToValueAtTime(0.1, now + duration)
+
+    // Pausa no final do efeito
+    setTimeout(() => {
+      source.playbackRate.cancelScheduledValues(this.context.currentTime)
+      source.playbackRate.setValueAtTime(0.001, this.context.currentTime)
+    }, duration * 1000)
+
+    // Retoma após 2 segundos de pausa
+    setTimeout(() => {
+      source.playbackRate.cancelScheduledValues(this.context.currentTime)
+      source.playbackRate.setValueAtTime(1.0, this.context.currentTime)
+    }, (duration + 2) * 1000)
   }
 
   /**
@@ -98,12 +107,10 @@ export class DJEffects {
   applyBrake(source: AudioBufferSourceNode, duration: number): void {
     const now = this.context.currentTime
 
+    // Freia até parar (nao volta)
     source.playbackRate.cancelScheduledValues(now)
     source.playbackRate.setValueAtTime(source.playbackRate.value, now)
-    // Freia rápido
-    source.playbackRate.linearRampToValueAtTime(0.05, now + duration * 0.7)
-    // Volta ao normal
-    source.playbackRate.linearRampToValueAtTime(1.0, now + duration)
+    source.playbackRate.linearRampToValueAtTime(0.001, now + duration)
   }
 
   /**
@@ -114,14 +121,14 @@ export class DJEffects {
    * @param duration Duração total em segundos (padrão: 1.5)
    */
   playSiren(destination: AudioNode, duration: number = 1.5): void {
-    const now = this.context.currentTime
+    const ctx = this.context
+    const now = ctx.currentTime
 
-    const oscillator = this.context.createOscillator()
+    const oscillator = ctx.createOscillator()
     oscillator.type = 'sawtooth'
 
-    const gain = this.context.createGain()
-    gain.gain.setValueAtTime(0.3, now)
-    gain.gain.linearRampToValueAtTime(0, now + duration)
+    const gain = ctx.createGain()
+    gain.gain.setValueAtTime(0.6, now)
 
     // 3 ciclos de 800Hz -> 1200Hz -> 800Hz
     const cycleTime = duration / 3
@@ -132,11 +139,20 @@ export class DJEffects {
       oscillator.frequency.linearRampToValueAtTime(800, cycleStart + cycleTime)
     }
 
+    // Fade out no final para não cortar seco
+    gain.gain.setValueAtTime(0.6, now + duration - 0.1)
+    gain.gain.linearRampToValueAtTime(0, now + duration)
+
     oscillator.connect(gain)
-    gain.connect(destination)
+    gain.connect(ctx.destination)
 
     oscillator.start(now)
     oscillator.stop(now + duration)
+
+    setTimeout(() => {
+      oscillator.disconnect()
+      gain.disconnect()
+    }, (duration + 0.5) * 1000)
   }
 
   /**
@@ -161,14 +177,20 @@ export class DJEffects {
 
     const gain = this.context.createGain()
     gain.gain.setValueAtTime(0, now)
-    gain.gain.linearRampToValueAtTime(0.5, now + durationSeconds)
+    gain.gain.linearRampToValueAtTime(0.8, now + durationSeconds)
 
     source.connect(bandpass)
     bandpass.connect(gain)
-    gain.connect(destination)
+    gain.connect(this.context.destination)
 
     source.start(now)
     source.stop(now + durationSeconds)
+
+    setTimeout(() => {
+      source.disconnect()
+      bandpass.disconnect()
+      gain.disconnect()
+    }, (durationSeconds + 0.5) * 1000)
   }
 
   /**

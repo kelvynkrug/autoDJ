@@ -8,13 +8,16 @@ interface PlayerState {
   currentTrackIndex: number
   tracks: Track[]
   volume: number
+  /** ID do set atualmente carregado no player */
+  activeSetId: string | null
 
   play: () => void
   pause: () => void
   skip: () => void
   setVolume: (v: number) => void
-  setTracks: (tracks: Track[]) => void
+  setTracks: (tracks: Track[], setId?: string) => void
   setCurrentTrackIndex: (index: number) => void
+  reset: () => void
 }
 
 export const usePlayerStore = create<PlayerState>((set, get) => ({
@@ -22,6 +25,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   currentTrackIndex: 0,
   tracks: [],
   volume: 0.8,
+  activeSetId: null,
 
   play: () => set({ isPlaying: true }),
 
@@ -39,8 +43,10 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
 
   setVolume: (v: number) => set({ volume: Math.max(0, Math.min(1, v)) }),
 
-  setTracks: (tracks: Track[]) =>
-    set({ tracks, currentTrackIndex: 0, isPlaying: false }),
+  setTracks: (tracks: Track[], setId?: string) =>
+    set({ tracks, currentTrackIndex: 0, isPlaying: false, activeSetId: setId ?? null }),
 
   setCurrentTrackIndex: (index: number) => set({ currentTrackIndex: index }),
+
+  reset: () => set({ isPlaying: false, currentTrackIndex: 0, tracks: [], activeSetId: null }),
 }))

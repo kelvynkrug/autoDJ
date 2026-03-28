@@ -4,6 +4,8 @@ import { useState } from 'react'
 import { Slider } from '@/components/ui/slider'
 
 interface VolumeControlProps {
+  volume?: number
+  onVolumeChange?: (volume: number) => void
   className?: string
 }
 
@@ -22,16 +24,23 @@ function VolumeIcon({ muted, className }: { muted: boolean; className?: string }
   )
 }
 
-export function VolumeControl({ className = '' }: VolumeControlProps) {
-  const [volume, setVolume] = useState(80)
+export function VolumeControl({ volume: externalVolume, onVolumeChange, className = '' }: VolumeControlProps) {
+  const [internalVolume, setInternalVolume] = useState(80)
   const [prevVolume, setPrevVolume] = useState(80)
+
+  const volume = externalVolume !== undefined ? Math.round(externalVolume * 100) : internalVolume
+
+  const handleChange = (value: number) => {
+    setInternalVolume(value)
+    onVolumeChange?.(value / 100)
+  }
 
   const toggleMute = () => {
     if (volume > 0) {
       setPrevVolume(volume)
-      setVolume(0)
+      handleChange(0)
     } else {
-      setVolume(prevVolume)
+      handleChange(prevVolume)
     }
   }
 
@@ -47,7 +56,7 @@ export function VolumeControl({ className = '' }: VolumeControlProps) {
         value={volume}
         min={0}
         max={100}
-        onChange={setVolume}
+        onChange={handleChange}
         className="w-24"
       />
     </div>

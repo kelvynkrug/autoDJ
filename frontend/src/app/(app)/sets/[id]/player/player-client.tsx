@@ -7,7 +7,7 @@ import { PlayerControls } from '@/components/player/player-controls'
 import { VolumeControl } from '@/components/player/volume-control'
 import { TrackProgress } from '@/components/player/track-progress'
 import { EffectsPad } from '@/components/player/effects-pad'
-import type { DJSet, SetTrack } from '@/lib/types'
+import type { DJSet, SetTrack, TransitionType } from '@/lib/types'
 import { AudioEngine } from '@/lib/audio/engine'
 import { DJEffects } from '@/lib/audio/effects'
 import type { PlayableTrack } from '@/lib/audio/types'
@@ -27,7 +27,10 @@ export function PlayerClient({ set }: { set: DJSet }) {
   const [currentIndex, setCurrentIndex] = useState(0)
   const [isPlaying, setIsPlaying] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
+  const [volume, setVolume] = useState(0.8)
   const [playableTracks, setPlayableTracks] = useState<PlayableTrack[]>([])
+  const [pendingTrackIndex, setPendingTrackIndex] = useState<number | null>(null)
+  const [showTransitionPicker, setShowTransitionPicker] = useState(false)
   const engineRef = useRef<AudioEngine | null>(null)
   const effectsRef = useRef<DJEffects | null>(null)
   const initializedRef = useRef(false)
@@ -131,7 +134,12 @@ export function PlayerClient({ set }: { set: DJSet }) {
       }
       case 'brake': {
         const source = engine.getActiveDeckSource()
-        if (source) effects.applyBrake(source, 1.5)
+        if (source) {
+          effects.applyBrake(source, 1.5)
+          setTimeout(() => {
+            setIsPlaying(false)
+          }, 1500)
+        }
         break
       }
       case 'echo': {
@@ -146,9 +154,9 @@ export function PlayerClient({ set }: { set: DJSet }) {
         const now = ctx.currentTime
         masterGain.gain.cancelScheduledValues(now)
         masterGain.gain.setValueAtTime(masterGain.gain.value, now)
-        masterGain.gain.linearRampToValueAtTime(0.05, now + 0.3)
-        masterGain.gain.setValueAtTime(0.05, now + 3.3)
-        masterGain.gain.linearRampToValueAtTime(1.0, now + 4.0)
+        masterGain.gain.linearRampToValueAtTime(0.005, now + 0.3)
+        masterGain.gain.setValueAtTime(0.005, now + 4.0)
+        masterGain.gain.linearRampToValueAtTime(1.0, now + 5.0)
         break
       }
       case 'filter': {
@@ -214,6 +222,57 @@ export function PlayerClient({ set }: { set: DJSet }) {
       await newEngine.play()
     }
   }, [playableTracks, isPlaying])
+
+  const handleTrackClick = useCallback((index: number) => {
+    if (index === currentIndex) return
+
+    if (!isPlaying) {
+      handleTrackSelect(index)
+      return
+    }
+
+    setPendingTrackIndex(index)
+    setShowTransitionPicker(true)
+  }, [isPlaying, currentIndex, handleTrackSelect])
+
+  const handleTransitionChoice = useCallback(async (transitionType: string) => {
+    setShowTransitionPicker(false)
+
+    if (pendingTrackIndex === null) return
+
+    if (transitionType === 'instant') {
+      await handleTrackSelect(pendingTrackIndex)
+      setPendingTrackIndex(null)
+      return
+    }
+
+    const engine = engineRef.current
+    if (!engine) {
+      await handleTrackSelect(pendingTrackIndex)
+      setPendingTrackIndex(null)
+      return
+    }
+
+    // Encontra o índice relativo dentro das playableTracks
+    const targetPlayableIndex = playableTracks.findIndex(
+      (t) => t.id === set.tracks[pendingTrackIndex]?.id,
+    )
+
+    if (targetPlayableIndex === -1) {
+      await handleTrackSelect(pendingTrackIndex)
+      setPendingTrackIndex(null)
+      return
+    }
+
+    try {
+      await engine.skipToWithTransition(targetPlayableIndex, transitionType as TransitionType)
+    } catch (error) {
+      console.error('[PlayerClient] Falha na transição:', error)
+      await handleTrackSelect(pendingTrackIndex)
+    }
+
+    setPendingTrackIndex(null)
+  }, [pendingTrackIndex, handleTrackSelect, playableTracks, set.tracks])
 
   if (!currentTrack) {
     return (
@@ -285,10 +344,19 @@ export function PlayerClient({ set }: { set: DJSet }) {
             key={currentTrack.id}
             durationMs={currentTrack.durationMs}
             isPlaying={isPlaying}
+            onSeek={(ms) => {
+              engineRef.current?.seek(ms / 1000)
+            }}
           />
 
           <div className="flex items-center justify-center gap-6">
-            <VolumeControl />
+            <VolumeControl
+              volume={volume}
+              onVolumeChange={(v) => {
+                setVolume(v)
+                engineRef.current?.setVolume(v)
+              }}
+            />
             <PlayerControls
               isPlaying={isPlaying}
               onToggle={handleToggle}
@@ -327,7 +395,7 @@ export function PlayerClient({ set }: { set: DJSet }) {
         </div>
       </div>
 
-      <div className="lg:w-80 shrink-0 rounded-xl border border-zinc-800 bg-zinc-900 p-4 lg:max-h-[calc(100vh-10rem)] lg:overflow-y-auto">
+      <div className="relative lg:w-80 shrink-0 rounded-xl border border-zinc-800 bg-zinc-900 p-4 lg:max-h-[calc(100vh-10rem)] lg:overflow-y-auto">
         <h3 className="mb-3 text-sm font-semibold text-zinc-300">
           {set.name} --- {set.tracks.length} faixas
         </h3>
@@ -337,7 +405,7 @@ export function PlayerClient({ set }: { set: DJSet }) {
             return (
               <button
                 key={track.id}
-                onClick={() => handleTrackSelect(i)}
+                onClick={() => handleTrackClick(i)}
                 className={`
                   w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-all cursor-pointer
                   ${isCurrent ? 'bg-violet-600/15 border border-violet-500/30' : 'hover:bg-zinc-800/60 border border-transparent'}
@@ -370,6 +438,47 @@ export function PlayerClient({ set }: { set: DJSet }) {
             )
           })}
         </div>
+
+        {showTransitionPicker && (
+          <>
+            <div
+              className="fixed inset-0 z-40"
+              onClick={() => { setShowTransitionPicker(false); setPendingTrackIndex(null) }}
+            />
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-50 bg-zinc-900 border border-zinc-700 rounded-xl p-4 shadow-2xl min-w-[280px]">
+              <p className="text-sm text-zinc-300 mb-3 text-center">
+                Transicao para: <span className="text-violet-400">{pendingTrackIndex !== null ? set.tracks[pendingTrackIndex]?.title : ''}</span>
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  { id: 'crossfade', label: 'Crossfade', desc: 'Suave' },
+                  { id: 'eq_swap', label: 'EQ Swap', desc: 'Troca graves' },
+                  { id: 'filter_sweep', label: 'Filter', desc: 'Filtro' },
+                  { id: 'rewind', label: 'Rewind', desc: 'Rebobina' },
+                  { id: 'buildup_drop', label: 'Build & Drop', desc: 'Sobe e dropa' },
+                  { id: 'echo_out', label: 'Echo Out', desc: 'Eco sumindo' },
+                  { id: 'brake', label: 'Brake', desc: 'Freia disco' },
+                  { id: 'instant', label: 'Direto', desc: 'Sem transicao' },
+                ].map((t) => (
+                  <button
+                    key={t.id}
+                    onClick={() => handleTransitionChoice(t.id)}
+                    className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-left hover:border-violet-500 hover:bg-violet-500/10 transition-colors"
+                  >
+                    <p className="text-xs font-medium text-zinc-200">{t.label}</p>
+                    <p className="text-[10px] text-zinc-500">{t.desc}</p>
+                  </button>
+                ))}
+              </div>
+              <button
+                onClick={() => { setShowTransitionPicker(false); setPendingTrackIndex(null) }}
+                className="mt-2 w-full text-center text-xs text-zinc-500 hover:text-zinc-300"
+              >
+                Cancelar
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   )

@@ -168,11 +168,52 @@ export class AudioEngine {
   }
 
   /**
+   * Pula para uma faixa específica com um tipo de transição escolhido manualmente.
+   * Reordena internamente as tracks para que a faixa destino fique na posição seguinte.
+   */
+  async skipToWithTransition(targetIndex: number, transitionType: TransitionType): Promise<void> {
+    if (this.isTransitioning) return
+    if (targetIndex < 0 || targetIndex >= this.tracks.length) return
+    if (targetIndex === this.currentIndex) return
+
+    // Reorganiza as tracks: mantém a atual, coloca a destino como próxima, depois as restantes
+    const currentTrack = this.tracks[this.currentIndex]
+    const targetTrack = this.tracks[targetIndex]
+    const remaining = this.tracks.filter((_, i) => i !== this.currentIndex && i !== targetIndex)
+
+    // Tracks após o target na ordem original
+    const afterTarget = this.tracks.filter((_, i) => i > targetIndex && i !== this.currentIndex)
+    const beforeTarget = this.tracks.filter((_, i) => i > this.currentIndex && i < targetIndex)
+
+    this.tracks = [currentTrack, targetTrack, ...beforeTarget, ...afterTarget]
+    this.currentIndex = 0
+
+    // Reseta preload pois a ordem mudou
+    this.preloadScheduled = false
+    this.transitionScheduled = false
+
+    await this.executeTransition(transitionType)
+  }
+
+  /**
    * Define o volume master.
    * @param value 0 a 1
    */
   setVolume(value: number): void {
     this.masterGain.gain.value = Math.max(0, Math.min(1, value))
+  }
+
+  /**
+   * Seek para uma posição específica na faixa atual.
+   * @param timeSeconds Posição em segundos
+   */
+  seek(timeSeconds: number): void {
+    const deck = this.getActiveDeck()
+    if (deck.getBuffer()) {
+      const clampedTime = Math.max(0, Math.min(timeSeconds, deck.getDuration()))
+      deck.stop()
+      deck.play(clampedTime)
+    }
   }
 
   /** Retorna a posição atual de reprodução em segundos. */
