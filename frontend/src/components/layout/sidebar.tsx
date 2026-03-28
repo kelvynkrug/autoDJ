@@ -2,6 +2,8 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { useEffect, useState } from 'react'
+import { createClient } from '@/lib/supabase/client'
 
 const navItems = [
   {
@@ -35,6 +37,20 @@ const navItems = [
 
 export function Sidebar() {
   const pathname = usePathname()
+  const [userName, setUserName] = useState('')
+  const [userEmail, setUserEmail] = useState('')
+  const [userAvatar, setUserAvatar] = useState<string | null>(null)
+
+  useEffect(() => {
+    const supabase = createClient()
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) {
+        setUserName(user.user_metadata?.full_name ?? user.email?.split('@')[0] ?? 'DJ')
+        setUserEmail(user.email ?? '')
+        setUserAvatar(user.user_metadata?.avatar_url ?? user.user_metadata?.picture ?? null)
+      }
+    })
+  }, [])
 
   return (
     <>
@@ -74,12 +90,16 @@ export function Sidebar() {
 
         <div className="border-t border-zinc-800 p-4">
           <div className="flex items-center gap-3">
-            <div className="h-8 w-8 rounded-full bg-zinc-800 flex items-center justify-center text-xs font-medium text-zinc-400">
-              DJ
-            </div>
+            {userAvatar ? (
+              <img src={userAvatar} alt="" className="h-8 w-8 rounded-full object-cover" />
+            ) : (
+              <div className="h-8 w-8 rounded-full bg-zinc-800 flex items-center justify-center text-xs font-medium text-zinc-400">
+                {userName.charAt(0).toUpperCase() || 'DJ'}
+              </div>
+            )}
             <div className="min-w-0">
-              <p className="truncate text-sm font-medium text-zinc-200">DJ User</p>
-              <p className="truncate text-xs text-zinc-500">dj@autodj.app</p>
+              <p className="truncate text-sm font-medium text-zinc-200">{userName || 'DJ'}</p>
+              <p className="truncate text-xs text-zinc-500">{userEmail}</p>
             </div>
           </div>
         </div>

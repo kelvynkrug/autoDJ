@@ -116,6 +116,7 @@ export async function POST(request: Request) {
         danceability: (analysis?.danceability as number) ?? null,
       }
     })
+    .filter((t) => t.status === 'ready')
 
   if (!tracks || tracks.length === 0) {
     return NextResponse.json({

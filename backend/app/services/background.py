@@ -64,8 +64,8 @@ def process_track_download(
             "analyzing",
             {
                 "youtube_id": result.youtube_id,
-                "audio_storage_path": storage_path,
-                "file_size_bytes": result.size_bytes,
+                "audio_path": storage_path,
+                "audio_size_bytes": result.size_bytes,
             },
         )
 
