@@ -210,9 +210,9 @@ export function PlayerClient({ set }: { set: DJSet }) {
         const now1 = ctx.currentTime
         masterGain.gain.setValueAtTime(masterGain.gain.value, now1)
         masterGain.gain.linearRampToValueAtTime(0.15, now1 + 0.1)
-        effects.playSiren(masterGain, 1.5)
-        masterGain.gain.setValueAtTime(0.15, now1 + 1.5)
-        masterGain.gain.linearRampToValueAtTime(1.0, now1 + 2.0)
+        effects.playSiren(masterGain, 1.2)
+        masterGain.gain.setValueAtTime(0.15, now1 + 1.2)
+        masterGain.gain.linearRampToValueAtTime(1.0, now1 + 1.5)
         break
       }
       case 'horn': {
@@ -220,13 +220,13 @@ export function PlayerClient({ set }: { set: DJSet }) {
         masterGain.gain.setValueAtTime(masterGain.gain.value, now2)
         masterGain.gain.linearRampToValueAtTime(0.15, now2 + 0.1)
         effects.playAirHorn(masterGain, 3)
-        masterGain.gain.setValueAtTime(0.15, now2 + 0.8)
-        masterGain.gain.linearRampToValueAtTime(1.0, now2 + 1.3)
+        masterGain.gain.setValueAtTime(0.15, now2 + 0.7)
+        masterGain.gain.linearRampToValueAtTime(1.0, now2 + 1.0)
         break
       }
       case 'rewind': {
         const source = engine.getActiveDeckSource()
-        if (source) effects.applyRewind(source, 2)
+        if (source) effects.applyRewind(source, 1.5)
         break
       }
       case 'brake': {
@@ -242,19 +242,19 @@ export function PlayerClient({ set }: { set: DJSet }) {
       case 'echo': {
         const deck = engine.getActiveDeckPublic()
         const trackBpm = currentTrack?.analysis?.bpm ?? currentTrack?.bpmAdjusted ?? 128
-        effects.applyEchoOut(deck, 8, trackBpm || 128)
+        effects.applyEchoOut(deck, 4, trackBpm || 128)
         break
       }
       case 'riser':
-        effects.playRiser(masterGain, 3)
+        effects.playRiser(masterGain, 2.5)
         break
       case 'crowd': {
         const now = ctx.currentTime
         masterGain.gain.cancelScheduledValues(now)
         masterGain.gain.setValueAtTime(masterGain.gain.value, now)
-        masterGain.gain.linearRampToValueAtTime(0.005, now + 0.3)
-        masterGain.gain.setValueAtTime(0.005, now + 4.0)
-        masterGain.gain.linearRampToValueAtTime(1.0, now + 5.0)
+        masterGain.gain.linearRampToValueAtTime(0.005, now + 0.2)
+        masterGain.gain.setValueAtTime(0.005, now + 2.3)
+        masterGain.gain.linearRampToValueAtTime(1.0, now + 3.0)
         break
       }
       case 'filter': {
@@ -269,9 +269,9 @@ export function PlayerClient({ set }: { set: DJSet }) {
 
         const now = ctx.currentTime
         filter.frequency.setValueAtTime(20, now)
-        filter.frequency.exponentialRampToValueAtTime(4000, now + 1)
-        filter.frequency.setValueAtTime(4000, now + 2)
-        filter.frequency.exponentialRampToValueAtTime(20, now + 3)
+        filter.frequency.exponentialRampToValueAtTime(4000, now + 0.8)
+        filter.frequency.setValueAtTime(4000, now + 1.5)
+        filter.frequency.exponentialRampToValueAtTime(20, now + 2.5)
 
         setTimeout(() => {
           try {
@@ -280,7 +280,7 @@ export function PlayerClient({ set }: { set: DJSet }) {
           } catch {
             // nos podem ja ter sido desconectados
           }
-        }, 3500)
+        }, 3000)
         break
       }
     }
