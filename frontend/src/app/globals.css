@@ -1,0 +1,18 @@
+@import 'tailwindcss';
+
+@theme {
+  --color-spotify: #1DB954;
+  --color-youtube: #FF0000;
+  --color-surface: #18181b;
+  --color-border: #27272a;
+}
+
+body {
+  background-color: #09090b;
+  color: #f4f4f5;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #3f3f46 transparent;
+}

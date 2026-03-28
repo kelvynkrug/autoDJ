@@ -1,0 +1,10 @@
+-- ============================================================
+-- AutoDJ - Seed Data
+--
+-- Este arquivo e executado com `supabase db reset`.
+-- Adicione dados de desenvolvimento/teste aqui.
+--
+-- Nota: como o Supabase usa auth.users, voce precisa criar
+-- usuarios via supabase dashboard ou auth API antes de
+-- inserir dados que referenciam user_id.
+-- ============================================================

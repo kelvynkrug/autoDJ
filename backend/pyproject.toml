@@ -1,0 +1,40 @@
+[project]
+name = "autodj-backend"
+version = "0.1.0"
+description = "AutoDJ - Audio worker backend"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.30.0",
+    "yt-dlp>=2024.12.0",
+    "pydantic>=2.9.0",
+    "pydantic-settings>=2.5.0",
+    "supabase>=2.0.0",
+    "httpx>=0.27.0",
+    "numpy>=1.26.0",
+    "librosa>=0.10.0",
+    "soundfile>=0.12.0",
+    "python-multipart>=0.0.9",
+    "sse-starlette>=2.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.24.0",
+    "ruff>=0.8.0",
+]
+essentia = [
+    "essentia>=2.1b6",
+]
+
+[build-system]
+requires = ["setuptools>=75.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W"]

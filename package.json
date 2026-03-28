@@ -1,0 +1,10 @@
+{
+  "name": "autodj",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "frontend": "cd frontend && npm run dev",
+    "backend": "cd backend && uvicorn app.main:app --reload",
+    "dev": "npm run frontend & npm run backend"
+  }
+}
