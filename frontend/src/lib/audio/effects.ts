@@ -68,36 +68,44 @@ export class DJEffects {
    * @param bpm BPM da faixa
    */
   applyEchoOut(deck: Deck, durationBeats: number, bpm: number): void {
+    const ctx = this.context
     const beatDuration = beatsToSeconds(1, bpm)
+    const delayTime = beatDuration / 2
     const totalDuration = beatsToSeconds(durationBeats, bpm)
-    const now = this.context.currentTime
+    const now = ctx.currentTime
 
-    const delay = this.context.createDelay(beatDuration)
-    delay.delayTime.value = beatDuration
+    const delay = ctx.createDelay(2)
+    delay.delayTime.setValueAtTime(delayTime, now)
 
-    const feedback = this.context.createGain()
-    feedback.gain.setValueAtTime(0.6, now)
+    const feedback = ctx.createGain()
+    feedback.gain.setValueAtTime(0.5, now)
     feedback.gain.linearRampToValueAtTime(0, now + totalDuration)
 
-    const output = deck.getOutput()
+    const wetGain = ctx.createGain()
+    wetGain.gain.setValueAtTime(0.4, now)
+    wetGain.gain.linearRampToValueAtTime(0, now + totalDuration)
 
-    // Insere delay loop: output -> delay -> feedback -> delay (loop)
-    // e delay -> output (mix do eco com sinal original)
-    output.connect(delay)
+    const deckOutput = deck.getOutput()
+
+    // Chain: deckOutput → delay → wetGain → destination
+    //                      ↑         ↓
+    //                      ← feedback ←
+    deckOutput.connect(delay)
+    delay.connect(wetGain)
     delay.connect(feedback)
     feedback.connect(delay)
-    delay.connect(output)
+    wetGain.connect(ctx.destination)
 
-    // Cleanup após o efeito terminar
     setTimeout(() => {
       try {
-        output.disconnect(delay)
+        deckOutput.disconnect(delay)
         delay.disconnect()
         feedback.disconnect()
+        wetGain.disconnect()
       } catch {
         // nós podem já ter sido desconectados
       }
-    }, totalDuration * 1000 + 500)
+    }, totalDuration * 1000 + 1000)
   }
 
   /**

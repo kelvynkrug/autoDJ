@@ -175,12 +175,24 @@ export function PlayerClient({ set }: { set: DJSet }) {
     const masterGain = engine.getMasterGain()
 
     switch (effectId) {
-      case 'siren':
+      case 'siren': {
+        const now1 = ctx.currentTime
+        masterGain.gain.setValueAtTime(masterGain.gain.value, now1)
+        masterGain.gain.linearRampToValueAtTime(0.15, now1 + 0.1)
         effects.playSiren(masterGain, 1.5)
+        masterGain.gain.setValueAtTime(0.15, now1 + 1.5)
+        masterGain.gain.linearRampToValueAtTime(1.0, now1 + 2.0)
         break
-      case 'horn':
-        effects.playSiren(masterGain, 0.5)
+      }
+      case 'horn': {
+        const now2 = ctx.currentTime
+        masterGain.gain.setValueAtTime(masterGain.gain.value, now2)
+        masterGain.gain.linearRampToValueAtTime(0.15, now2 + 0.1)
+        effects.playAirHorn(masterGain, 3)
+        masterGain.gain.setValueAtTime(0.15, now2 + 0.8)
+        masterGain.gain.linearRampToValueAtTime(1.0, now2 + 1.3)
         break
+      }
       case 'rewind': {
         const source = engine.getActiveDeckSource()
         if (source) effects.applyRewind(source, 2)
