@@ -82,7 +82,7 @@ export async function POST(request: Request) {
       user_id: auth.auth.user.id,
       playlist_id: playlistId,
       name,
-      status: 'draft',
+      status: 'ready',
       transition_type: transitionType,
       transition_beats: transitionBeats,
     })
@@ -120,7 +120,7 @@ export async function POST(request: Request) {
 
   if (!tracks || tracks.length === 0) {
     return NextResponse.json({
-      data: { id: djSet.id, name, status: 'draft', trackCount: 0 },
+      data: { id: djSet.id, name, status: 'ready', trackCount: 0 },
     })
   }
 
@@ -165,7 +165,7 @@ export async function POST(request: Request) {
             data: {
               id: djSet.id,
               name,
-              status: 'draft',
+              status: 'ready',
               trackCount: setTracks.length,
             },
           })
@@ -191,7 +191,7 @@ export async function POST(request: Request) {
     data: {
       id: djSet.id,
       name,
-      status: 'draft',
+      status: 'ready',
       trackCount: setTracks.length,
     },
   })
