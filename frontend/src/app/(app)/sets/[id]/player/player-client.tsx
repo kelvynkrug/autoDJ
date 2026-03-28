@@ -347,22 +347,21 @@ export function PlayerClient({ set }: { set: DJSet }) {
       return
     }
 
-    const engine = getOrCreateEngine()
     if (!isEngineInitialized()) {
       await handleTrackSelect(pendingTrackIndex)
       setPendingTrackIndex(null)
       return
     }
 
-    const targetPlayableIndex = playableTracks.findIndex(
-      (t) => t.id === set.tracks[pendingTrackIndex]?.id,
-    )
+    const targetPlayableIndex = setToPlayableIndex(pendingTrackIndex)
 
     if (targetPlayableIndex === -1) {
       await handleTrackSelect(pendingTrackIndex)
       setPendingTrackIndex(null)
       return
     }
+
+    const engine = getOrCreateEngine()
 
     try {
       await engine.skipToWithTransition(targetPlayableIndex, transitionType as TransitionType)
@@ -372,7 +371,7 @@ export function PlayerClient({ set }: { set: DJSet }) {
     }
 
     setPendingTrackIndex(null)
-  }, [pendingTrackIndex, handleTrackSelect, playableTracks, set.tracks])
+  }, [pendingTrackIndex, handleTrackSelect, setToPlayableIndex])
 
   if (!currentTrack) {
     return (
