@@ -16,7 +16,7 @@ async function refreshSpotifyToken(refreshToken: string): Promise<{ access_token
   return res.json()
 }
 
-export async function getProviderToken(userId: string, provider: 'spotify' | 'google'): Promise<string | null> {
+export async function getProviderToken(userId: string, provider: 'spotify' | 'google' | 'deezer'): Promise<string | null> {
   const supabase = await createServerClient()
 
   const { data: conn } = await supabase
@@ -31,6 +31,9 @@ export async function getProviderToken(userId: string, provider: 'spotify' | 'go
   const isExpired = conn.token_expires_at && new Date(conn.token_expires_at) < new Date()
 
   if (!isExpired) return conn.access_token
+
+  // Deezer tokens nao expiram
+  if (provider === 'deezer') return conn.access_token
 
   if (provider === 'spotify' && conn.refresh_token) {
     const refreshed = await refreshSpotifyToken(conn.refresh_token)

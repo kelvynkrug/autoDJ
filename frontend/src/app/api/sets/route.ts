@@ -96,12 +96,25 @@ export async function POST(request: Request) {
     )
   }
 
-  const { data: tracks } = await supabase
-    .from('tracks')
-    .select('id, bpm, camelot_key, energy, danceability')
+  const { data: playlistTracks } = await supabase
+    .from('playlist_tracks')
+    .select('track_id, position, tracks(id, status, track_analysis(bpm, camelot, energy, danceability))')
     .eq('playlist_id', playlistId)
-    .eq('status', 'ready')
     .order('position', { ascending: true })
+
+  const tracks = (playlistTracks ?? [])
+    .map((pt: Record<string, unknown>) => {
+      const t = pt.tracks as Record<string, unknown> | null
+      const analysis = t?.track_analysis as Record<string, unknown> | null
+      return {
+        id: t?.id as string,
+        status: t?.status as string,
+        bpm: analysis?.bpm as number | null,
+        camelot_key: analysis?.camelot as string | null,
+        energy: analysis?.energy as number | null,
+        danceability: analysis?.danceability as number | null,
+      }
+    })
 
   if (!tracks || tracks.length === 0) {
     return NextResponse.json({

@@ -163,24 +163,40 @@ export default function CreatePlaylistPage() {
         return
       }
 
-      const tracksToInsert = tracks.map((t, index) => ({
-        playlist_id: playlist.id,
-        provider_track_id: t.spotifyId ?? t.youtubeId ?? null,
+      const tracksToInsert = tracks.map((t) => ({
+        user_id: user.id,
+        spotify_id: t.spotifyId ?? null,
+        youtube_id: t.youtubeId ?? null,
         title: t.title,
         artist: t.artist,
-        album: t.album,
+        album: t.album ?? null,
         duration_ms: t.durationMs,
         cover_url: t.thumbnailUrl,
-        position: index,
         status: 'pending' as const,
       }))
 
-      const { error: tracksError } = await supabase
+      const { data: insertedTracks, error: tracksError } = await supabase
         .from('tracks')
         .insert(tracksToInsert)
+        .select('id')
 
-      if (tracksError) {
-        setError(tracksError.message)
+      if (tracksError || !insertedTracks) {
+        setError(tracksError?.message ?? 'Erro ao inserir tracks')
+        return
+      }
+
+      const playlistTracks = insertedTracks.map((t: { id: string }, index: number) => ({
+        playlist_id: playlist.id,
+        track_id: t.id,
+        position: index,
+      }))
+
+      const { error: junctionError } = await supabase
+        .from('playlist_tracks')
+        .insert(playlistTracks)
+
+      if (junctionError) {
+        setError(junctionError.message)
         return
       }
 

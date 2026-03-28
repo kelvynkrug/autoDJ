@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import type { Playlist } from '@/lib/types'
 
-type Tab = 'mine' | 'spotify' | 'youtube'
+type Tab = 'mine' | 'spotify' | 'youtube' | 'deezer'
 
 export default function PlaylistsPage() {
   const [tab, setTab] = useState<Tab>('mine')
@@ -19,6 +19,8 @@ export default function PlaylistsPage() {
   const [importing, setImporting] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [connectedProviders, setConnectedProviders] = useState<string[]>([])
+  const [linkUrl, setLinkUrl] = useState('')
+  const [importingLink, setImportingLink] = useState(false)
 
   const supabase = createClient()
 
@@ -28,8 +30,13 @@ export default function PlaylistsPage() {
   }, [])
 
   useEffect(() => {
-    if (tab === 'spotify' || tab === 'youtube') {
-      loadProviderPlaylists(tab === 'spotify' ? 'spotify' : 'google')
+    if (tab === 'spotify' || tab === 'youtube' || tab === 'deezer') {
+      const providerMap: Record<string, 'spotify' | 'google' | 'deezer'> = {
+        spotify: 'spotify',
+        youtube: 'google',
+        deezer: 'deezer',
+      }
+      loadProviderPlaylists(providerMap[tab])
     }
   }, [tab])
 
@@ -63,7 +70,7 @@ export default function PlaylistsPage() {
     setLoading(false)
   }
 
-  async function loadProviderPlaylists(provider: 'spotify' | 'google') {
+  async function loadProviderPlaylists(provider: 'spotify' | 'google' | 'deezer') {
     setProviderLoading(true)
     setError(null)
     setProviderPlaylists([])
@@ -88,7 +95,12 @@ export default function PlaylistsPage() {
   async function handleImport(playlist: Playlist) {
     setImporting(playlist.id)
     try {
-      const provider = tab === 'spotify' ? 'spotify' : 'google'
+      const providerMap: Record<string, 'spotify' | 'google' | 'deezer'> = {
+        spotify: 'spotify',
+        youtube: 'google',
+        deezer: 'deezer',
+      }
+      const provider = providerMap[tab] ?? 'spotify'
       const res = await fetch('/api/playlists/import', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -112,13 +124,19 @@ export default function PlaylistsPage() {
     }
   }
 
-  async function handleReconnect(provider: 'spotify' | 'google') {
+  async function handleReconnect(provider: 'spotify' | 'google' | 'deezer') {
+    if (provider === 'deezer') {
+      const appId = process.env.NEXT_PUBLIC_DEEZER_APP_ID
+      const redirect = `${window.location.origin}/deezer-callback`
+      window.location.href = `https://connect.deezer.com/oauth/auth.php?app_id=${appId}&redirect_uri=${encodeURIComponent(redirect)}&perms=basic_access,manage_library`
+      return
+    }
+
     const scopes: Record<string, string> = {
       spotify: 'playlist-read-private playlist-read-collaborative user-library-read',
       google: 'https://www.googleapis.com/auth/youtube.readonly openid email profile',
     }
 
-    // Use signInWithOAuth to force a fresh token
     await supabase.auth.signInWithOAuth({
       provider,
       options: {
@@ -129,10 +147,35 @@ export default function PlaylistsPage() {
     })
   }
 
+  async function handleImportLink() {
+    setImportingLink(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/playlists/import-link', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: linkUrl }),
+      })
+      const json = await res.json()
+      if (res.ok) {
+        setLinkUrl('')
+        await loadMyPlaylists()
+        setTab('mine')
+      } else {
+        setError(json.error?.message ?? 'Erro ao importar')
+      }
+    } catch {
+      setError('Erro ao importar playlist')
+    } finally {
+      setImportingLink(false)
+    }
+  }
+
   const tabs: { key: Tab; label: string; provider?: string }[] = [
     { key: 'mine', label: 'Minhas Playlists' },
     { key: 'spotify', label: 'Importar do Spotify', provider: 'spotify' },
     { key: 'youtube', label: 'Importar do YouTube', provider: 'google' },
+    { key: 'deezer', label: 'Importar do Deezer', provider: 'deezer' },
   ]
 
   return (
@@ -150,6 +193,22 @@ export default function PlaylistsPage() {
             Criar por gosto
           </Button>
         </Link>
+      </div>
+
+      <div className="flex gap-2">
+        <input
+          type="text"
+          placeholder="Cole um link de playlist (Spotify, Deezer, YouTube)"
+          value={linkUrl}
+          onChange={(e) => setLinkUrl(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && linkUrl.trim() && !importingLink) handleImportLink()
+          }}
+          className="flex-1 rounded-lg border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm text-zinc-100 placeholder-zinc-500 focus:border-violet-500 focus:outline-none"
+        />
+        <Button variant="primary" size="md" onClick={handleImportLink} disabled={!linkUrl.trim() || importingLink}>
+          {importingLink ? 'Importando...' : 'Importar'}
+        </Button>
       </div>
 
       <div className="flex gap-1 rounded-lg bg-zinc-900 p-1">
@@ -174,7 +233,7 @@ export default function PlaylistsPage() {
           <div className="flex items-center gap-3 shrink-0">
             {error.includes('expirado') || error.includes('Token') ? (
               <button
-                onClick={() => handleReconnect(tab === 'youtube' ? 'google' : 'spotify')}
+                onClick={() => handleReconnect(tab === 'youtube' ? 'google' : tab === 'deezer' ? 'deezer' : 'spotify')}
                 className="rounded-md bg-violet-600 px-3 py-1 text-xs font-medium text-white hover:bg-violet-500"
               >
                 Reconectar
@@ -199,7 +258,7 @@ export default function PlaylistsPage() {
             </svg>
             <p className="mt-4 text-zinc-400">Nenhuma playlist importada</p>
             <p className="mt-1 text-sm text-zinc-600">
-              Importe do Spotify/YouTube ou crie uma do zero por gostos musicais.
+              Importe do Spotify/YouTube/Deezer ou crie uma do zero por gostos musicais.
             </p>
             <Link href="/playlists/create" className="mt-4">
               <Button variant="primary" size="sm">
@@ -219,11 +278,13 @@ export default function PlaylistsPage() {
         )
       )}
 
-      {(tab === 'spotify' || tab === 'youtube') && (
+      {(tab === 'spotify' || tab === 'youtube' || tab === 'deezer') && (
         (() => {
-          const provider = tab === 'spotify' ? 'spotify' : 'google'
+          const providerMap: Record<string, string> = { spotify: 'spotify', youtube: 'google', deezer: 'deezer' }
+          const provider = providerMap[tab]
           const isConnected = connectedProviders.includes(provider)
-          const providerName = tab === 'spotify' ? 'Spotify' : 'YouTube'
+          const providerNameMap: Record<string, string> = { spotify: 'Spotify', youtube: 'YouTube', deezer: 'Deezer' }
+          const providerName = providerNameMap[tab]
 
           if (!isConnected) {
             return (

@@ -24,7 +24,7 @@ function ProviderCard({
   color,
 }: {
   name: string
-  provider: 'spotify' | 'google'
+  provider: 'spotify' | 'google' | 'deezer'
   connected: boolean
   color: string
 }) {
@@ -125,6 +125,7 @@ export default async function DashboardPage() {
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <ProviderCard name="Spotify" provider="spotify" connected={connectedProviders.includes('spotify')} color="bg-[#1DB954]" />
           <ProviderCard name="YouTube" provider="google" connected={connectedProviders.includes('google')} color="bg-[#FF0000]" />
+          <ProviderCard name="Deezer" provider="deezer" connected={connectedProviders.includes('deezer')} color="bg-[#A238FF]" />
         </div>
       </div>
 

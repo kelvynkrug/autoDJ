@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { Provider } from '@/lib/types'
 
-const SCOPES: Record<Provider, string> = {
+const SUPABASE_SCOPES: Record<Exclude<Provider, 'deezer'>, string> = {
   spotify: 'playlist-read-private playlist-read-collaborative user-library-read',
   google: 'https://www.googleapis.com/auth/youtube.readonly',
 }
@@ -14,13 +14,21 @@ export default function LoginPage() {
 
   async function handleLogin(provider: Provider) {
     setLoading(provider)
+
+    if (provider === 'deezer') {
+      const appId = process.env.NEXT_PUBLIC_DEEZER_APP_ID
+      const redirect = `${window.location.origin}/deezer-callback`
+      window.location.href = `https://connect.deezer.com/oauth/auth.php?app_id=${appId}&redirect_uri=${encodeURIComponent(redirect)}&perms=basic_access,manage_library`
+      return
+    }
+
     const supabase = createClient()
 
     const { error } = await supabase.auth.signInWithOAuth({
       provider,
       options: {
         redirectTo: `${window.location.origin}/callback`,
-        scopes: SCOPES[provider],
+        scopes: SUPABASE_SCOPES[provider],
       },
     })
 
@@ -59,6 +67,15 @@ export default function LoginPage() {
             <GoogleIcon />
             {loading === 'google' ? 'Conectando...' : 'Entrar com Google'}
           </button>
+
+          <button
+            onClick={() => handleLogin('deezer')}
+            disabled={loading !== null}
+            className="flex w-full items-center justify-center gap-3 rounded-lg bg-[#A238FF] px-4 py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+          >
+            <DeezerIcon />
+            {loading === 'deezer' ? 'Conectando...' : 'Entrar com Deezer'}
+          </button>
         </div>
 
         <p className="text-center text-xs text-zinc-600">
@@ -73,6 +90,14 @@ function SpotifyIcon() {
   return (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
       <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z" />
+    </svg>
+  )
+}
+
+function DeezerIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M18.81 4.16v3.03H24V4.16h-5.19zM6.27 8.38v3.027h5.189V8.38H6.27zm12.54 0v3.027H24V8.38h-5.19zM6.27 12.594v3.027h5.189v-3.027H6.27zm6.27 0v3.027h5.19v-3.027h-5.19zm6.27 0v3.027H24v-3.027h-5.19zM0 16.81v3.029h5.19v-3.03H0zm6.27 0v3.029h5.189v-3.03H6.27zm6.27 0v3.029h5.19v-3.03h-5.19zm6.27 0v3.029H24v-3.03h-5.19z" />
     </svg>
   )
 }

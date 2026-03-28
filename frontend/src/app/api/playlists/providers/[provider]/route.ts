@@ -7,7 +7,8 @@ interface SpotifyPlaylist {
   id: string
   name: string
   images: { url: string }[]
-  tracks: { href: string; total: number } | null
+  tracks?: { href: string; total: number }
+  items?: { href: string; total: number }
 }
 
 interface YouTubePlaylist {
@@ -42,10 +43,33 @@ async function fetchSpotifyPlaylists(token: string) {
     .map((p: SpotifyPlaylist) => ({
       id: p.id,
       name: p.name,
-      trackCount: typeof p.tracks === 'object' && p.tracks !== null ? p.tracks.total : 0,
+      trackCount: p.tracks?.total ?? p.items?.total ?? 0,
       provider: 'spotify' as const,
       coverUrl: p.images?.[0]?.url ?? null,
     }))
+}
+
+interface DeezerPlaylist {
+  id: number
+  title: string
+  nb_tracks: number
+  picture_medium: string | null
+}
+
+async function fetchDeezerPlaylists(token: string) {
+  const res = await fetch(`https://api.deezer.com/user/me/playlists?access_token=${token}`)
+  if (!res.ok) {
+    const body = await res.text()
+    throw new Error(`Deezer API ${res.status}: ${body}`)
+  }
+  const data: { data?: DeezerPlaylist[] } = await res.json()
+  return (data.data ?? []).map((p) => ({
+    id: String(p.id),
+    name: p.title,
+    trackCount: p.nb_tracks,
+    provider: 'deezer' as const,
+    coverUrl: p.picture_medium ?? null,
+  }))
 }
 
 async function fetchYouTubePlaylists(token: string) {
@@ -92,14 +116,15 @@ export async function GET(
   if (!auth.ok) return auth.response
 
   const { provider } = await params
-  if (provider !== 'spotify' && provider !== 'google') {
+  if (provider !== 'spotify' && provider !== 'google' && provider !== 'deezer') {
     return NextResponse.json(
       { error: { code: 'INVALID_PROVIDER', message: `Provider "${provider}" nao suportado` } },
       { status: 400 },
     )
   }
 
-  const providerName = provider === 'spotify' ? 'Spotify' : 'YouTube'
+  const providerNames: Record<string, string> = { spotify: 'Spotify', google: 'YouTube', deezer: 'Deezer' }
+  const providerName = providerNames[provider] ?? provider
   const providerToken = await getProviderToken(auth.auth.user.id, provider)
   if (!providerToken) {
     return NextResponse.json(
@@ -112,6 +137,7 @@ export async function GET(
     const fetchers: Record<Provider, (token: string) => Promise<unknown>> = {
       spotify: fetchSpotifyPlaylists,
       google: fetchYouTubePlaylists,
+      deezer: fetchDeezerPlaylists,
     }
 
     const playlists = await fetchers[provider](providerToken)

@@ -6,7 +6,14 @@ import { BACKEND_URL } from '@/lib/constants'
 import type { Provider } from '@/lib/types'
 
 interface SpotifyTrackItem {
-  track: {
+  item?: {
+    id: string
+    name: string
+    artists: { name: string }[]
+    album: { name: string; images: { url: string }[] }
+    duration_ms: number
+  }
+  track?: {
     id: string
     name: string
     artists: { name: string }[]
@@ -24,30 +31,60 @@ interface YouTubePlaylistItem {
   }
 }
 
-async function fetchSpotifyTracks(playlistId: string, token: string) {
-  const items: SpotifyTrackItem[] = []
-  let url: string | null =
-    `https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=100&fields=items(track(id,name,artists,album,duration_ms)),next`
+async function fetchDeezerTracks(playlistId: string, token: string) {
+  const res = await fetch(
+    `https://api.deezer.com/playlist/${playlistId}/tracks?access_token=${token}&limit=1000`,
+  )
+  if (!res.ok) throw new Error(`Deezer API ${res.status}`)
+  const data = await res.json()
+  return (data.data ?? []).map((t: Record<string, unknown>) => ({
+    provider_track_id: String(t.id),
+    title: t.title as string,
+    artist: (t.artist as Record<string, string>)?.name ?? 'Desconhecido',
+    album: (t.album as Record<string, string>)?.title ?? '',
+    duration_ms: ((t.duration as number) ?? 0) * 1000,
+    cover_url: (t.album as Record<string, string>)?.cover_medium ?? null,
+  }))
+}
 
-  while (url) {
-    const res: Response = await fetch(url, {
+async function fetchSpotifyTracks(playlistId: string, token: string) {
+  // Use /playlists/{id} endpoint (works in Dev mode, unlike /playlists/{id}/tracks)
+  const res: Response = await fetch(
+    `https://api.spotify.com/v1/playlists/${playlistId}`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  )
+  if (!res.ok) throw new Error(`Spotify API ${res.status}`)
+
+  const playlist = await res.json()
+  const itemsData = playlist.items ?? playlist.tracks
+  const rawItems: SpotifyTrackItem[] = itemsData?.items ?? []
+
+  // Handle pagination if needed
+  let nextUrl: string | null = itemsData?.next ?? null
+  while (nextUrl) {
+    const pageRes: Response = await fetch(nextUrl, {
       headers: { Authorization: `Bearer ${token}` },
     })
-    if (!res.ok) throw new Error(`Spotify API ${res.status}`)
-
-    const data: { items: SpotifyTrackItem[]; next: string | null } = await res.json()
-    items.push(...data.items.filter((i: SpotifyTrackItem) => i.track))
-    url = data.next
+    if (!pageRes.ok) break
+    const pageData = await pageRes.json()
+    rawItems.push(...(pageData.items ?? []))
+    nextUrl = pageData.next ?? null
   }
 
-  return items.map((i) => ({
-    provider_track_id: i.track.id,
-    title: i.track.name,
-    artist: i.track.artists.map((a) => a.name).join(', '),
-    album: i.track.album.name,
-    duration_ms: i.track.duration_ms,
-    cover_url: i.track.album.images?.[0]?.url ?? null,
-  }))
+  return rawItems
+    .map((i) => {
+      const t = i.item ?? i.track
+      if (!t?.id || !t?.name) return null
+      return {
+        provider_track_id: t.id,
+        title: t.name,
+        artist: t.artists?.map((a) => a.name).join(', ') ?? 'Desconhecido',
+        album: t.album?.name ?? '',
+        duration_ms: t.duration_ms ?? 0,
+        cover_url: t.album?.images?.[0]?.url ?? null,
+      }
+    })
+    .filter((t): t is NonNullable<typeof t> => t !== null)
 }
 
 async function fetchYouTubeTracks(playlistId: string, token: string) {
@@ -101,7 +138,8 @@ export async function POST(request: Request) {
     name?: string
   }
 
-  const providerName = provider === 'spotify' ? 'Spotify' : 'YouTube'
+  const providerNames: Record<string, string> = { spotify: 'Spotify', google: 'YouTube', deezer: 'Deezer' }
+  const providerName = providerNames[provider] ?? provider
   const providerToken = await getProviderToken(auth.auth.user.id, provider)
   if (!providerToken) {
     return NextResponse.json(
@@ -114,6 +152,7 @@ export async function POST(request: Request) {
     const trackFetchers: Record<Provider, (id: string, token: string) => ReturnType<typeof fetchSpotifyTracks>> = {
       spotify: fetchSpotifyTracks,
       google: fetchYouTubeTracks,
+      deezer: fetchDeezerTracks,
     }
 
     const providerTracks = await trackFetchers[provider](providerPlaylistId, providerToken)
@@ -150,6 +189,7 @@ export async function POST(request: Request) {
       cover_url: t.cover_url,
       spotify_id: provider === 'spotify' ? t.provider_track_id : null,
       youtube_id: provider === 'google' ? t.provider_track_id : null,
+      deezer_id: provider === 'deezer' ? t.provider_track_id : null,
       status: 'pending' as const,
     }))
 

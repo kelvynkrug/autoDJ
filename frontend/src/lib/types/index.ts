@@ -1,4 +1,4 @@
-export type Provider = 'spotify' | 'google'
+export type Provider = 'spotify' | 'google' | 'deezer'
 
 export type TrackStatus =
   | 'pending'
