@@ -16,7 +16,7 @@ export async function GET(
 
   const { data: track, error: trackError } = await supabase
     .from('tracks')
-    .select('id, duration_ms, status, audio_storage_path, user_id')
+    .select('id, duration_ms, status, audio_path, user_id')
     .eq('id', id)
     .single()
 
@@ -34,7 +34,7 @@ export async function GET(
     )
   }
 
-  if (track.status !== 'ready' || !track.audio_storage_path) {
+  if (track.status !== 'ready' || !track.audio_path) {
     return NextResponse.json(
       { error: { code: 'NOT_READY', message: 'Audio ainda nao esta disponivel' } },
       { status: 409 },
@@ -42,10 +42,10 @@ export async function GET(
   }
 
   // URL externa (preview do Deezer/Spotify) - retornar diretamente
-  if (track.audio_storage_path.startsWith('http')) {
+  if (track.audio_path.startsWith('http')) {
     return NextResponse.json({
       data: {
-        url: track.audio_storage_path,
+        url: track.audio_path,
         format: 'mp3',
         durationMs: track.duration_ms,
       },
@@ -57,7 +57,7 @@ export async function GET(
   const { data: signedUrlData, error: signedUrlError } = await serviceClient
     .storage
     .from('audio-files')
-    .createSignedUrl(track.audio_storage_path, SIGNED_URL_EXPIRY)
+    .createSignedUrl(track.audio_path, SIGNED_URL_EXPIRY)
 
   if (signedUrlError || !signedUrlData) {
     return NextResponse.json(

@@ -243,7 +243,7 @@ export async function POST(request: Request) {
         spotify_id: provider === 'spotify' ? t.provider_track_id : null,
         youtube_id: provider === 'google' ? t.provider_track_id : null,
         deezer_id: provider === 'deezer' ? t.provider_track_id : null,
-        audio_storage_path: t.preview_url ?? null,
+        audio_path: t.preview_url ?? null,
         status: t.preview_url ? 'ready' : 'pending',
       }))
 
