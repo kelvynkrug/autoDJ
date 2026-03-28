@@ -210,7 +210,8 @@ export function PlayerClient({ set }: { set: DJSet }) {
       }
       case 'echo': {
         const deck = engine.getActiveDeckPublic()
-        effects.applyEchoOut(deck, 8, 128)
+        const trackBpm = currentTrack?.analysis?.bpm ?? currentTrack?.bpmAdjusted ?? 128
+        effects.applyEchoOut(deck, 8, trackBpm || 128)
         break
       }
       case 'riser':
@@ -252,7 +253,7 @@ export function PlayerClient({ set }: { set: DJSet }) {
         break
       }
     }
-  }, [storePause])
+  }, [storePause, currentTrack])
 
   const handleSkip = useCallback(async () => {
     const engine = getOrCreateEngine()
