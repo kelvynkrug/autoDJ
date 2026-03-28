@@ -21,7 +21,7 @@ async function fetchSpotifyPlaylists(token: string) {
   let url: string | null = 'https://api.spotify.com/v1/me/playlists?limit=50'
 
   while (url) {
-    const res = await fetch(url, {
+    const res: Response = await fetch(url, {
       headers: { Authorization: `Bearer ${token}` },
     })
 
@@ -30,7 +30,7 @@ async function fetchSpotifyPlaylists(token: string) {
       throw new Error(`Spotify API ${res.status}: ${body}`)
     }
 
-    const data = await res.json()
+    const data: { items?: SpotifyPlaylist[]; next?: string | null } = await res.json()
     if (data.items) {
       items.push(...data.items)
     }

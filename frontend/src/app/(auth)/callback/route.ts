@@ -19,8 +19,8 @@ export async function GET(request: Request) {
         // Detect which provider was just authenticated by checking the most recent identity
         const identities = session.user.identities ?? []
         const latestIdentity = identities.sort(
-          (a: { updated_at: string }, b: { updated_at: string }) =>
-            new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+          (a, b) =>
+            new Date(b.updated_at ?? 0).getTime() - new Date(a.updated_at ?? 0).getTime()
         )[0]
         const providerType = (latestIdentity?.provider === 'google' ? 'google' : latestIdentity?.provider === 'spotify' ? 'spotify' : session.user.app_metadata?.provider) as 'spotify' | 'google'
 
