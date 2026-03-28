@@ -1,11 +1,19 @@
 'use client'
 
 import { useRouter, useSearchParams } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 
-export default function NewSetPage() {
+export default function NewSetPageWrapper() {
+  return (
+    <Suspense fallback={<div className="flex justify-center py-20"><div className="h-8 w-8 animate-spin rounded-full border-2 border-violet-500 border-t-transparent" /></div>}>
+      <NewSetPage />
+    </Suspense>
+  )
+}
+
+function NewSetPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const playlistId = searchParams.get('playlist')
