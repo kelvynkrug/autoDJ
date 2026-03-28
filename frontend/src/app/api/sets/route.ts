@@ -105,14 +105,15 @@ export async function POST(request: Request) {
   const tracks = (playlistTracks ?? [])
     .map((pt: Record<string, unknown>) => {
       const t = pt.tracks as Record<string, unknown> | null
-      const analysis = t?.track_analysis as Record<string, unknown> | null
+      const analysisArr = t?.track_analysis as Record<string, unknown>[] | null
+      const analysis = analysisArr?.[0] ?? null
       return {
         id: t?.id as string,
         status: t?.status as string,
-        bpm: analysis?.bpm as number | null,
-        camelot_key: analysis?.camelot as string | null,
-        energy: analysis?.energy as number | null,
-        danceability: analysis?.danceability as number | null,
+        bpm: (analysis?.bpm as number) ?? null,
+        camelot_key: (analysis?.camelot as string) ?? null,
+        energy: (analysis?.energy as number) ?? null,
+        danceability: (analysis?.danceability as number) ?? null,
       }
     })
 
@@ -123,49 +124,54 @@ export async function POST(request: Request) {
   }
 
   if (autoOrder) {
-    try {
-      const orderRes = await fetch(`${BACKEND_URL}/api/sets/order`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          set_id: djSet.id,
-          tracks: tracks.map((t) => ({
-            id: t.id,
-            bpm: t.bpm,
-            camelot_key: t.camelot_key,
-            energy: t.energy,
-            danceability: t.danceability,
-          })),
-          transition_type: transitionType,
-        }),
-      })
+    const tracksWithAnalysis = tracks.filter(
+      (t) => t.bpm != null && t.camelot_key != null && t.energy != null,
+    )
 
-      if (orderRes.ok) {
-        const orderData = await orderRes.json()
-        const setTracks = orderData.ordered_tracks.map(
-          (t: { track_id: string; position: number; bpm_adjusted: number; compatibility_score: number; transition_type: string }, i: number) => ({
-            set_id: djSet.id,
-            track_id: t.track_id,
-            position: i,
-            bpm_adjusted: t.bpm_adjusted,
-            compatibility_score: t.compatibility_score,
-            transition_type: t.transition_type ?? transitionType,
+    if (tracksWithAnalysis.length > 0) {
+      try {
+        const orderRes = await fetch(`${BACKEND_URL}/api/v1/ordering/optimize`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            tracks: tracksWithAnalysis.map((t) => ({
+              track_id: t.id,
+              bpm: t.bpm,
+              camelot: t.camelot_key,
+              energy: t.energy,
+              danceability: t.danceability ?? 0.5,
+              title: '',
+            })),
           }),
-        )
-
-        await supabase.from('set_tracks').insert(setTracks)
-
-        return NextResponse.json({
-          data: {
-            id: djSet.id,
-            name,
-            status: 'draft',
-            trackCount: setTracks.length,
-          },
         })
+
+        if (orderRes.ok) {
+          const orderData = await orderRes.json()
+          const setTracks = orderData.ordered_tracks.map(
+            (t: { track_id: string; position: number; transition_score: number }, i: number) => ({
+              set_id: djSet.id,
+              track_id: t.track_id,
+              position: i,
+              bpm_adjusted: tracksWithAnalysis.find((tr) => tr.id === t.track_id)?.bpm ?? 0,
+              compatibility_score: t.transition_score,
+              transition_type: transitionType,
+            }),
+          )
+
+          await supabase.from('set_tracks').insert(setTracks)
+
+          return NextResponse.json({
+            data: {
+              id: djSet.id,
+              name,
+              status: 'draft',
+              trackCount: setTracks.length,
+            },
+          })
+        }
+      } catch {
+        // Fallback para ordem manual se backend estiver offline
       }
-    } catch {
-      // Fallback para ordem manual se backend estiver offline
     }
   }
 

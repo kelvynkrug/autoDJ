@@ -1,25 +1,142 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import Link from 'next/link'
 import { NowPlaying } from '@/components/player/now-playing'
 import { PlayerControls } from '@/components/player/player-controls'
 import { VolumeControl } from '@/components/player/volume-control'
 import { TrackProgress } from '@/components/player/track-progress'
-import type { DJSet } from '@/lib/types'
+import type { DJSet, SetTrack } from '@/lib/types'
+import { AudioEngine } from '@/lib/audio/engine'
+import type { PlayableTrack } from '@/lib/audio/types'
+
+async function fetchAudioUrl(trackId: string): Promise<string | null> {
+  try {
+    const res = await fetch(`/api/tracks/${trackId}/audio-url`)
+    if (!res.ok) return null
+    const json = await res.json()
+    return json.data?.url ?? null
+  } catch {
+    return null
+  }
+}
 
 export function PlayerClient({ set }: { set: DJSet }) {
   const [currentIndex, setCurrentIndex] = useState(0)
-  const [isPlaying, setIsPlaying] = useState(true)
+  const [isPlaying, setIsPlaying] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
+  const [playableTracks, setPlayableTracks] = useState<PlayableTrack[]>([])
+  const engineRef = useRef<AudioEngine | null>(null)
+  const initializedRef = useRef(false)
 
   const currentTrack = set.tracks[currentIndex]
   const nextTrack = set.tracks[currentIndex + 1]
 
-  const handleSkip = () => {
-    if (currentIndex < set.tracks.length - 1) {
-      setCurrentIndex(currentIndex + 1)
+  // Buscar audio URLs para todas as tracks ready
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadAudioUrls() {
+      const readyTracks = set.tracks.filter((t) => t.status === 'ready')
+
+      if (readyTracks.length === 0) {
+        setIsLoading(false)
+        return
+      }
+
+      const results = await Promise.all(
+        readyTracks.map(async (track) => {
+          const audioUrl = await fetchAudioUrl(track.id)
+          return { ...track, audioUrl: audioUrl ?? '', outroStartS: null } as PlayableTrack
+        }),
+      )
+
+      if (cancelled) return
+
+      const validTracks = results.filter((t) => t.audioUrl !== '')
+      setPlayableTracks(validTracks)
+      setIsLoading(false)
     }
-  }
+
+    loadAudioUrls()
+    return () => { cancelled = true }
+  }, [set.tracks])
+
+  // Inicializar AudioEngine quando tracks estiverem prontas
+  useEffect(() => {
+    if (playableTracks.length === 0 || initializedRef.current) return
+
+    const engine = new AudioEngine()
+    engine.setTracks(playableTracks)
+
+    engine.onTrackChange = (index) => {
+      setCurrentIndex(index)
+    }
+
+    engine.onSetEnd = () => {
+      setIsPlaying(false)
+    }
+
+    engine.onError = (error) => {
+      console.error('[AudioEngine]', error.message)
+    }
+
+    engineRef.current = engine
+    initializedRef.current = true
+
+    return () => {
+      engine.destroy()
+      engineRef.current = null
+      initializedRef.current = false
+    }
+  }, [playableTracks])
+
+  const handleToggle = useCallback(async () => {
+    const engine = engineRef.current
+    if (!engine) return
+
+    if (isPlaying) {
+      engine.pause()
+      setIsPlaying(false)
+    } else {
+      await engine.play()
+      setIsPlaying(true)
+    }
+  }, [isPlaying])
+
+  const handleSkip = useCallback(async () => {
+    const engine = engineRef.current
+    if (!engine) return
+
+    await engine.skip()
+  }, [])
+
+  const handleTrackSelect = useCallback(async (index: number) => {
+    setCurrentIndex(index)
+    // O AudioEngine nao suporta seek direto por index, entao resetamos
+    const engine = engineRef.current
+    if (!engine || playableTracks.length === 0) return
+
+    engine.destroy()
+    initializedRef.current = false
+
+    const slicedTracks = playableTracks.slice(index)
+    const newEngine = new AudioEngine()
+    newEngine.setTracks(slicedTracks)
+
+    newEngine.onTrackChange = (i) => {
+      setCurrentIndex(index + i)
+    }
+    newEngine.onSetEnd = () => setIsPlaying(false)
+    newEngine.onError = (error) => console.error('[AudioEngine]', error.message)
+
+    engineRef.current = newEngine
+    initializedRef.current = true
+
+    if (isPlaying) {
+      await newEngine.play()
+    }
+  }, [playableTracks, isPlaying])
 
   if (!currentTrack) {
     return (
@@ -51,6 +168,13 @@ export function PlayerClient({ set }: { set: DJSet }) {
         </Link>
 
         <div className="w-full max-w-md space-y-8">
+          {isLoading && (
+            <div className="flex items-center justify-center py-8">
+              <div className="h-6 w-6 animate-spin rounded-full border-2 border-violet-500 border-t-transparent" />
+              <span className="ml-3 text-sm text-zinc-400">Carregando audio...</span>
+            </div>
+          )}
+
           <div className="relative mx-auto aspect-square w-full max-w-sm overflow-hidden rounded-2xl bg-zinc-800 shadow-2xl shadow-black/50">
             {currentTrack.coverUrl ? (
               <img
@@ -76,7 +200,7 @@ export function PlayerClient({ set }: { set: DJSet }) {
             <div className="mt-3 flex items-center justify-center gap-3 text-xs text-zinc-500">
               <span className="font-mono">{currentTrack.analysis?.bpm ?? currentTrack.bpmAdjusted} BPM</span>
               <span className="h-1 w-1 rounded-full bg-zinc-700" />
-              <span className="font-mono">{currentTrack.analysis?.camelot ?? '—'}</span>
+              <span className="font-mono">{currentTrack.analysis?.camelot ?? '---'}</span>
             </div>
           </div>
 
@@ -89,11 +213,19 @@ export function PlayerClient({ set }: { set: DJSet }) {
             <VolumeControl />
             <PlayerControls
               isPlaying={isPlaying}
-              onToggle={() => setIsPlaying(!isPlaying)}
+              onToggle={handleToggle}
               onSkip={handleSkip}
               size="lg"
             />
           </div>
+
+          {playableTracks.length === 0 && !isLoading && (
+            <div className="rounded-lg border border-yellow-800/50 bg-yellow-900/20 p-3 text-center">
+              <p className="text-xs text-yellow-400">
+                Nenhuma faixa com audio disponivel. As tracks precisam ser processadas primeiro.
+              </p>
+            </div>
+          )}
 
           {isPlaying && (
             <div className="mx-auto w-fit rounded-full bg-violet-600/10 px-4 py-2 text-center">
@@ -114,7 +246,7 @@ export function PlayerClient({ set }: { set: DJSet }) {
 
       <div className="lg:w-80 shrink-0 rounded-xl border border-zinc-800 bg-zinc-900 p-4 lg:max-h-[calc(100vh-10rem)] lg:overflow-y-auto">
         <h3 className="mb-3 text-sm font-semibold text-zinc-300">
-          {set.name} — {set.tracks.length} faixas
+          {set.name} --- {set.tracks.length} faixas
         </h3>
         <div className="space-y-1">
           {set.tracks.map((track, i) => {
@@ -122,7 +254,7 @@ export function PlayerClient({ set }: { set: DJSet }) {
             return (
               <button
                 key={track.id}
-                onClick={() => setCurrentIndex(i)}
+                onClick={() => handleTrackSelect(i)}
                 className={`
                   w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-all cursor-pointer
                   ${isCurrent ? 'bg-violet-600/15 border border-violet-500/30' : 'hover:bg-zinc-800/60 border border-transparent'}

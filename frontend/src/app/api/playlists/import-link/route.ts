@@ -44,11 +44,18 @@ function parsePlaylistUrl(url: string): ParsedLink | null {
 }
 
 async function resolveDeezerShortLink(url: string): Promise<string | null> {
-  const res = await fetch(url, { redirect: 'manual' })
-  const location = res.headers.get('location')
-  if (!location) return null
-  const match = location.match(/deezer\.com\/(?:[a-z]{2}\/)?playlist\/(\d+)/)
-  return match?.[1] ?? null
+  // Follow all redirects to get the final URL
+  const res = await fetch(url, { redirect: 'follow' })
+  const finalUrl = res.url
+
+  // Try to find playlist ID in the final URL
+  const match = finalUrl.match(/deezer\.com\/(?:[a-z]{2}\/)?playlist\/(\d+)/)
+  if (match) return match[1]
+
+  // Also check response body for playlist links (some short links render a page)
+  const body = await res.text()
+  const bodyMatch = body.match(/deezer\.com\/(?:[a-z]{2}\/)?playlist\/(\d+)/)
+  return bodyMatch?.[1] ?? null
 }
 
 async function getSpotifyClientToken(): Promise<string> {
@@ -266,28 +273,29 @@ export async function POST(request: Request) {
       }
     }
 
-    // Disparar job de download no backend
-    let jobId: string | null = null
+    // Disparar download no backend
     if (playlistData.tracks.length > 0) {
       try {
-        const jobRes = await fetch(`${BACKEND_URL}/api/jobs/download`, {
+        const insertedTrackIds = (await supabase
+          .from('playlist_tracks')
+          .select('track_id')
+          .eq('playlist_id', playlist.id)
+          .order('position', { ascending: true })
+        ).data ?? []
+
+        const downloadTracks = insertedTrackIds.map((pt: { track_id: string }, i: number) => ({
+          track_id: pt.track_id,
+          query: `${playlistData.tracks[i].artist} - ${playlistData.tracks[i].title}`,
+          youtube_id: provider === 'google' ? playlistData.tracks[i].provider_track_id : null,
+          artist: playlistData.tracks[i].artist,
+          title: playlistData.tracks[i].title,
+        }))
+
+        await fetch(`${BACKEND_URL}/api/v1/download/batch`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            playlist_id: playlist.id,
-            tracks: playlistData.tracks.map((t) => ({
-              provider_track_id: t.provider_track_id,
-              title: t.title,
-              artist: t.artist,
-              provider,
-            })),
-          }),
+          body: JSON.stringify({ tracks: downloadTracks }),
         })
-
-        if (jobRes.ok) {
-          const jobData = await jobRes.json()
-          jobId = jobData.job_id ?? null
-        }
       } catch {
         // Backend offline nao deve bloquear a importacao
       }
@@ -296,7 +304,6 @@ export async function POST(request: Request) {
     return NextResponse.json({
       data: {
         playlist: { ...playlist, trackCount: playlistData.tracks.length },
-        jobId,
       },
     })
   } catch (err) {

@@ -223,26 +223,20 @@ export async function POST(request: Request) {
       )
     }
 
-    let jobId: string | null = null
     try {
-      const jobRes = await fetch(`${BACKEND_URL}/api/jobs/download`, {
+      const downloadTracks = insertedTracks.map((t: { id: string }, i: number) => ({
+        track_id: t.id,
+        query: `${providerTracks[i].artist} - ${providerTracks[i].title}`,
+        youtube_id: provider === 'google' ? providerTracks[i].provider_track_id : null,
+        artist: providerTracks[i].artist,
+        title: providerTracks[i].title,
+      }))
+
+      await fetch(`${BACKEND_URL}/api/v1/download/batch`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          playlist_id: playlist.id,
-          tracks: providerTracks.map((t) => ({
-            provider_track_id: t.provider_track_id,
-            title: t.title,
-            artist: t.artist,
-            provider,
-          })),
-        }),
+        body: JSON.stringify({ tracks: downloadTracks }),
       })
-
-      if (jobRes.ok) {
-        const jobData = await jobRes.json()
-        jobId = jobData.job_id ?? null
-      }
     } catch {
       // Backend offline nao deve bloquear a importacao
     }
@@ -250,7 +244,6 @@ export async function POST(request: Request) {
     return NextResponse.json({
       data: {
         playlist: { ...playlist, trackCount: providerTracks.length },
-        jobId,
       },
     })
   } catch (err) {

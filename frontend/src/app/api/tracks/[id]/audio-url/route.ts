@@ -16,7 +16,7 @@ export async function GET(
 
   const { data: track, error: trackError } = await supabase
     .from('tracks')
-    .select('id, duration_ms, status, storage_path, playlists!inner(user_id)')
+    .select('id, duration_ms, status, audio_storage_path, user_id')
     .eq('id', id)
     .single()
 
@@ -27,15 +27,14 @@ export async function GET(
     )
   }
 
-  const playlist = track.playlists as unknown as { user_id: string }
-  if (playlist.user_id !== auth.auth.user.id) {
+  if (track.user_id !== auth.auth.user.id) {
     return NextResponse.json(
       { error: { code: 'FORBIDDEN', message: 'Sem permissao para acessar esta track' } },
       { status: 403 },
     )
   }
 
-  if (track.status !== 'ready' || !track.storage_path) {
+  if (track.status !== 'ready' || !track.audio_storage_path) {
     return NextResponse.json(
       { error: { code: 'NOT_READY', message: 'Audio ainda nao esta disponivel' } },
       { status: 409 },
@@ -46,8 +45,8 @@ export async function GET(
 
   const { data: signedUrlData, error: signedUrlError } = await serviceClient
     .storage
-    .from('audio')
-    .createSignedUrl(track.storage_path, SIGNED_URL_EXPIRY)
+    .from('audio-files')
+    .createSignedUrl(track.audio_storage_path, SIGNED_URL_EXPIRY)
 
   if (signedUrlError || !signedUrlData) {
     return NextResponse.json(

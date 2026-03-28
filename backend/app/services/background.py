@@ -72,6 +72,9 @@ def process_track_download(
         _cleanup_file(result.path)
         logger.info("Download concluido para track %s (yt:%s)", track_id, result.youtube_id)
 
+        # Dispara analise automaticamente apos download
+        process_track_analysis(track_id)
+
     except Exception as exc:
         _update_track_status(track_id, "error", {"error_message": str(exc)})
         logger.exception("Erro no download da track %s", track_id)

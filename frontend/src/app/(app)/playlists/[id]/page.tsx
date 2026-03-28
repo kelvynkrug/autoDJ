@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ProgressBar } from '@/components/ui/progress-bar'
 import { TrackRow } from '@/components/playlist/track-row'
+import { ProcessingPoller } from '@/components/playlist/processing-poller'
 import { createServerClient } from '@/lib/supabase/server'
 import type { Track, TrackAnalysis, CamelotKey, TrackStatus } from '@/lib/types'
 
@@ -86,8 +87,13 @@ export default async function PlaylistDetailPage({
       ? 'YouTube'
       : 'Criada'
 
+  const hasPendingTracks = tracks.some((t) =>
+    ['pending', 'searching', 'downloading', 'analyzing'].includes(t.status),
+  )
+
   return (
     <div className="space-y-6">
+      <ProcessingPoller hasPendingTracks={hasPendingTracks} />
       <Link
         href="/playlists"
         className="inline-flex items-center gap-1 text-sm text-zinc-400 hover:text-zinc-200 transition-colors"
