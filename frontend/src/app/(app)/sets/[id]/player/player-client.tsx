@@ -163,7 +163,7 @@ export function PlayerClient({ set }: { set: DJSet }) {
     setEngineInitialized(true)
 
     // NAO destruir no cleanup — o singleton sobrevive a re-renders
-  }, [playableTracks, set.id, set.tracks, activeSetId, storePlay, storePause, setCurrentTrackIndex, setStoreTracks])
+  }, [playableTracks, set.id, set.tracks, activeSetId, storePlay, storePause, setCurrentTrackIndex, setStoreTracks, playableToSetIndex])
 
   // Polling do tempo real do AudioContext para sincronizar progress bar
   useEffect(() => {
