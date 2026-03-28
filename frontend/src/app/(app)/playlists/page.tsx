@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { PlaylistCard } from '@/components/playlist/playlist-card'
 import { Button } from '@/components/ui/button'
@@ -119,9 +120,19 @@ export default function PlaylistsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-zinc-100">Playlists</h1>
-        <p className="mt-1 text-zinc-400">Gerencie e importe suas playlists</p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-zinc-100">Playlists</h1>
+          <p className="mt-1 text-zinc-400">Gerencie e importe suas playlists</p>
+        </div>
+        <Link href="/playlists/create">
+          <Button variant="primary" size="md">
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+            </svg>
+            Criar por gosto
+          </Button>
+        </Link>
       </div>
 
       <div className="flex gap-1 rounded-lg bg-zinc-900 p-1">
@@ -161,8 +172,16 @@ export default function PlaylistsPage() {
             </svg>
             <p className="mt-4 text-zinc-400">Nenhuma playlist importada</p>
             <p className="mt-1 text-sm text-zinc-600">
-              Use as abas acima para importar do Spotify ou YouTube.
+              Importe do Spotify/YouTube ou crie uma do zero por gostos musicais.
             </p>
+            <Link href="/playlists/create" className="mt-4">
+              <Button variant="primary" size="sm">
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 00-2.455 2.456z" />
+                </svg>
+                Criar playlist por gosto
+              </Button>
+            </Link>
           </div>
         ) : (
           <div className="space-y-3">

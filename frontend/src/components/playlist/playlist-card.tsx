@@ -11,8 +11,16 @@ interface PlaylistCardProps {
 }
 
 export function PlaylistCard({ playlist, showImport, onImport }: PlaylistCardProps) {
-  const providerBadge = playlist.provider === 'spotify' ? 'spotify' : 'youtube'
-  const providerLabel = playlist.provider === 'spotify' ? 'Spotify' : 'YouTube'
+  const providerBadge = playlist.provider === 'spotify'
+    ? 'spotify'
+    : playlist.provider === 'google'
+      ? 'youtube'
+      : 'default'
+  const providerLabel = playlist.provider === 'spotify'
+    ? 'Spotify'
+    : playlist.provider === 'google'
+      ? 'YouTube'
+      : 'Criada'
 
   const content = (
     <div className="group flex items-center gap-4 rounded-xl border border-zinc-800 bg-zinc-900 p-4 transition-all duration-200 hover:border-zinc-700 hover:bg-zinc-900/80">
@@ -35,7 +43,7 @@ export function PlaylistCard({ playlist, showImport, onImport }: PlaylistCardPro
       <div className="min-w-0 flex-1">
         <p className="truncate font-medium text-zinc-100">{playlist.name}</p>
         <p className="text-sm text-zinc-400">{playlist.trackCount} faixas</p>
-        <Badge variant={providerBadge as 'spotify' | 'youtube'} className="mt-1.5">
+        <Badge variant={providerBadge as 'spotify' | 'youtube' | 'default'} className="mt-1.5">
           {providerLabel}
         </Badge>
       </div>

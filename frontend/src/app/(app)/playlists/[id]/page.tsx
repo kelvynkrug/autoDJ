@@ -75,8 +75,16 @@ export default async function PlaylistDetailPage({
   const isProcessing = tracks.some((t) =>
     ['searching', 'downloading', 'analyzing'].includes(t.status),
   )
-  const providerBadge = playlist.provider === 'spotify' ? 'spotify' : 'youtube'
-  const providerLabel = playlist.provider === 'spotify' ? 'Spotify' : 'YouTube'
+  const providerBadge = playlist.provider === 'spotify'
+    ? 'spotify'
+    : playlist.provider === 'google'
+      ? 'youtube'
+      : 'default'
+  const providerLabel = playlist.provider === 'spotify'
+    ? 'Spotify'
+    : playlist.provider === 'google'
+      ? 'YouTube'
+      : 'Criada'
 
   return (
     <div className="space-y-6">
@@ -109,7 +117,7 @@ export default async function PlaylistDetailPage({
 
         <div className="flex-1 space-y-3">
           <div>
-            <Badge variant={providerBadge as 'spotify' | 'youtube'}>{providerLabel}</Badge>
+            <Badge variant={providerBadge as 'spotify' | 'youtube' | 'default'}>{providerLabel}</Badge>
             <h1 className="mt-2 text-3xl font-bold text-zinc-100">{playlist.name}</h1>
             <p className="mt-1 text-zinc-400">{tracks.length} faixas</p>
           </div>

@@ -48,7 +48,7 @@ export interface Playlist {
   id: string
   name: string
   trackCount: number
-  provider: Provider
+  provider: Provider | null
   coverUrl: string | null
   tracks?: Track[]
 }
