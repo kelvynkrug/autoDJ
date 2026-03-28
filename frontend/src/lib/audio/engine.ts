@@ -1,7 +1,15 @@
 import type { TransitionType } from '@/lib/types'
 import { Deck } from './deck'
 import { CrossfaderNode } from './crossfader'
-import { crossfadeTransition, eqSwapTransition, filterSweepTransition } from './transitions'
+import {
+  crossfadeTransition,
+  eqSwapTransition,
+  filterSweepTransition,
+  rewindTransition,
+  buildupDropTransition,
+  echoOutTransition,
+  brakeTransition,
+} from './transitions'
 import { beatsToSeconds, getTransitionStartTime } from './utils'
 import type { PlayableTrack } from './types'
 
@@ -350,6 +358,18 @@ export class AudioEngine {
           break
         case 'filter_sweep':
           await filterSweepTransition(fromDeck, toDeck, this.crossfader, config)
+          break
+        case 'rewind':
+          await rewindTransition(fromDeck, toDeck, this.crossfader, config)
+          break
+        case 'buildup_drop':
+          await buildupDropTransition(fromDeck, toDeck, this.crossfader, config)
+          break
+        case 'echo_out':
+          await echoOutTransition(fromDeck, toDeck, this.crossfader, config)
+          break
+        case 'brake':
+          await brakeTransition(fromDeck, toDeck, this.crossfader, config)
           break
       }
     } catch (error) {

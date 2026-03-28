@@ -109,11 +109,15 @@ function NewSetPage() {
 
         <div>
           <label className="block text-sm font-medium text-zinc-300 mb-2">Tipo de Transição</label>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
             {[
               { value: 'crossfade', label: 'Crossfade', desc: 'Suave' },
               { value: 'eq_swap', label: 'EQ Swap', desc: 'Troca graves' },
               { value: 'filter_sweep', label: 'Filter Sweep', desc: 'Filtro' },
+              { value: 'rewind', label: 'Rewind', desc: 'Rebobina' },
+              { value: 'buildup_drop', label: 'Build & Drop', desc: 'Sobe e dropa' },
+              { value: 'echo_out', label: 'Echo Out', desc: 'Eco sumindo' },
+              { value: 'brake', label: 'Brake', desc: 'Freia disco' },
             ].map((t) => (
               <button
                 key={t.value}

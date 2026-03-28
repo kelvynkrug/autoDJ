@@ -152,3 +152,149 @@ export async function filterSweepTransition(
   toDeck.setMidGain(0)
   toDeck.setHighGain(0)
 }
+
+/**
+ * Rewind Transition: backspin no deck A enquanto deck B entra limpo.
+ *
+ * O deck que sai tem seu playback rate reduzido exponencialmente (efeito rebobinar),
+ * enquanto o crossfader move suavemente para o deck que entra.
+ */
+export async function rewindTransition(
+  fromDeck: Deck,
+  toDeck: Deck,
+  crossfader: CrossfaderNode,
+  config: TransitionConfig,
+): Promise<void> {
+  const durationS = beatsToSeconds(config.durationBeats, config.bpm)
+  const currentPos = crossfader.getPosition()
+  const targetPos = currentPos < 0.5 ? 1 : 0
+  const effects = new DJEffects(fromDeck['context'])
+
+  toDeck.play()
+
+  // Aplica rewind no source do fromDeck
+  const fromSource = fromDeck['source']
+  if (fromSource) {
+    effects.applyRewind(fromSource, durationS * 0.6)
+  }
+
+  // Fade out do from e crossfader move
+  fromDeck.fadeVolumeTo(0, durationS * 0.6)
+  crossfader.fadeTo(targetPos, durationS)
+
+  await wait(durationS * 1000)
+
+  fromDeck.stop()
+  fromDeck.setVolume(1)
+}
+
+/**
+ * Build-up + Drop: cria tensão cortando graves do deck A (highpass crescente),
+ * seguido de uma liberação explosiva quando deck B entra com graves plenos.
+ *
+ * Inclui um riser de ruído branco para aumentar a energia antes do drop.
+ */
+export async function buildupDropTransition(
+  fromDeck: Deck,
+  toDeck: Deck,
+  crossfader: CrossfaderNode,
+  config: TransitionConfig,
+): Promise<void> {
+  const durationS = beatsToSeconds(config.durationBeats, config.bpm)
+  const currentPos = crossfader.getPosition()
+  const targetPos = currentPos < 0.5 ? 1 : 0
+  const context = fromDeck['context'] as AudioContext
+  const effects = new DJEffects(context)
+
+  // Fase build-up: corta graves do fromDeck gradualmente
+  fromDeck.fadeEQTo('low', -40, durationS * 0.75)
+  fromDeck.fadeEQTo('mid', -20, durationS * 0.6)
+
+  // Riser de ruído branco acompanha o build-up
+  const masterOutput = crossfader['output'] as GainNode
+  effects.playRiser(masterOutput, durationS * 0.75)
+
+  await wait(durationS * 0.75 * 1000)
+
+  // Drop: toDeck entra com tudo, fromDeck sai
+  toDeck.play()
+  crossfader.fadeTo(targetPos, durationS * 0.1)
+  fromDeck.fadeVolumeTo(0, durationS * 0.25)
+
+  await wait(durationS * 0.25 * 1000)
+
+  // Cleanup
+  fromDeck.stop()
+  fromDeck.setVolume(1)
+  fromDeck.setLowGain(0)
+  fromDeck.setMidGain(0)
+}
+
+/**
+ * Echo Out: deck A ganha eco/delay com feedback decrescente enquanto
+ * deck B entra suavemente por baixo.
+ *
+ * O eco vai sumindo naturalmente, criando espaço para a próxima faixa.
+ */
+export async function echoOutTransition(
+  fromDeck: Deck,
+  toDeck: Deck,
+  crossfader: CrossfaderNode,
+  config: TransitionConfig,
+): Promise<void> {
+  const durationS = beatsToSeconds(config.durationBeats, config.bpm)
+  const currentPos = crossfader.getPosition()
+  const targetPos = currentPos < 0.5 ? 1 : 0
+  const context = fromDeck['context'] as AudioContext
+  const effects = new DJEffects(context)
+
+  // Aplica echo no deck que sai
+  effects.applyEchoOut(fromDeck, config.durationBeats, config.bpm)
+
+  // Fade out do fromDeck
+  fromDeck.fadeVolumeTo(0, durationS)
+
+  // toDeck entra com fade in suave
+  toDeck.play()
+  crossfader.fadeTo(targetPos, durationS * 0.7)
+
+  await wait(durationS * 1000)
+
+  fromDeck.stop()
+  fromDeck.setVolume(1)
+}
+
+/**
+ * Brake Transition: vinyl stop no deck A (desacelera o disco) enquanto
+ * deck B entra por cima.
+ *
+ * Simula o DJ freando o disco de vinil manualmente.
+ */
+export async function brakeTransition(
+  fromDeck: Deck,
+  toDeck: Deck,
+  crossfader: CrossfaderNode,
+  config: TransitionConfig,
+): Promise<void> {
+  const durationS = beatsToSeconds(config.durationBeats, config.bpm)
+  const brakeDuration = Math.min(durationS * 0.4, 2)
+  const currentPos = crossfader.getPosition()
+  const targetPos = currentPos < 0.5 ? 1 : 0
+  const effects = new DJEffects(fromDeck['context'])
+
+  toDeck.play()
+
+  // Aplica brake no source do fromDeck
+  const fromSource = fromDeck['source']
+  if (fromSource) {
+    effects.applyBrake(fromSource, brakeDuration)
+  }
+
+  fromDeck.fadeVolumeTo(0, brakeDuration)
+  crossfader.fadeTo(targetPos, durationS * 0.5)
+
+  await wait(durationS * 0.5 * 1000)
+
+  fromDeck.stop()
+  fromDeck.setVolume(1)
+}

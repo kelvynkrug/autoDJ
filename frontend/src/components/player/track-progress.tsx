@@ -16,7 +16,7 @@ function formatTime(ms: number): string {
 }
 
 export function TrackProgress({ durationMs, isPlaying, className = '' }: TrackProgressProps) {
-  const [currentMs, setCurrentMs] = useState(45000)
+  const [currentMs, setCurrentMs] = useState(0)
 
   useEffect(() => {
     if (!isPlaying) return

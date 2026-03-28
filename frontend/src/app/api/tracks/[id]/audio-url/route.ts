@@ -56,7 +56,7 @@ export async function GET(
 
   const { data: signedUrlData, error: signedUrlError } = await serviceClient
     .storage
-    .from('audio-files')
+    .from('audio')
     .createSignedUrl(track.audio_path, SIGNED_URL_EXPIRY)
 
   if (signedUrlError || !signedUrlData) {
