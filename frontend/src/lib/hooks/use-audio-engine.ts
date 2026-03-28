@@ -1,38 +1,29 @@
 'use client'
 
-import { useEffect, useRef, useCallback } from 'react'
-import { AudioEngine } from '@/lib/audio/engine'
+import { useEffect, useCallback } from 'react'
 import { usePlayerStore } from '@/lib/stores/player-store'
+import {
+  getOrCreateEngine,
+  isEngineInitialized,
+} from '@/lib/audio/singleton'
 
 export function useAudioEngine() {
-  const engineRef = useRef<AudioEngine | null>(null)
-
-  const { isPlaying, volume, currentTrackIndex, tracks, setCurrentTrackIndex, pause } =
+  const { isPlaying, volume, setCurrentTrackIndex, pause } =
     usePlayerStore()
 
   const getEngine = useCallback(() => {
-    if (!engineRef.current) {
-      engineRef.current = new AudioEngine()
-    }
-    return engineRef.current
+    return getOrCreateEngine()
   }, [])
 
   useEffect(() => {
-    return () => {
-      engineRef.current?.destroy()
-      engineRef.current = null
-    }
-  }, [])
-
-  useEffect(() => {
-    const engine = engineRef.current
-    if (!engine) return
+    if (!isEngineInitialized()) return
+    const engine = getOrCreateEngine()
     engine.setVolume(volume)
   }, [volume])
 
   useEffect(() => {
-    const engine = engineRef.current
-    if (!engine) return
+    if (!isEngineInitialized()) return
+    const engine = getOrCreateEngine()
 
     engine.onTrackChange = (index) => {
       setCurrentTrackIndex(index)
@@ -45,6 +36,5 @@ export function useAudioEngine() {
 
   return {
     getEngine,
-    engineRef,
   }
 }
