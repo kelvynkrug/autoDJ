@@ -63,6 +63,8 @@ export function PlayerClient({ set }: { set: DJSet }) {
   const [pendingTrackIndex, setPendingTrackIndex] = useState<number | null>(null)
   const [showTransitionPicker, setShowTransitionPicker] = useState(false)
 
+  const [currentTimeMs, setCurrentTimeMs] = useState(0)
+
   const {
     isPlaying,
     currentTrackIndex,
@@ -131,6 +133,7 @@ export function PlayerClient({ set }: { set: DJSet }) {
 
     engine.onTrackChange = (index) => {
       setCurrentTrackIndex(index)
+      setCurrentTimeMs(0)
     }
 
     engine.onSetEnd = () => {
@@ -146,6 +149,19 @@ export function PlayerClient({ set }: { set: DJSet }) {
 
     // NAO destruir no cleanup — o singleton sobrevive a re-renders
   }, [playableTracks, set.id, set.tracks, activeSetId, storePlay, storePause, setCurrentTrackIndex, setStoreTracks])
+
+  // Polling do tempo real do AudioContext para sincronizar progress bar
+  useEffect(() => {
+    if (!isPlaying || !isEngineInitialized()) return
+
+    const interval = setInterval(() => {
+      const engine = getOrCreateEngine()
+      const currentSeconds = engine.getCurrentTime()
+      setCurrentTimeMs(Math.floor(currentSeconds * 1000))
+    }, 250)
+
+    return () => clearInterval(interval)
+  }, [isPlaying])
 
   // Sincronizar volume com engine
   useEffect(() => {
@@ -274,6 +290,7 @@ export function PlayerClient({ set }: { set: DJSet }) {
 
     engine.onTrackChange = (i) => {
       setCurrentTrackIndex(index + i)
+      setCurrentTimeMs(0)
     }
     engine.onSetEnd = () => storePause()
     engine.onError = (error) => console.error('[AudioEngine]', error.message)
@@ -405,10 +422,12 @@ export function PlayerClient({ set }: { set: DJSet }) {
             key={currentTrack.id}
             durationMs={currentTrack.durationMs}
             isPlaying={isPlaying}
+            currentMs={currentTimeMs}
             onSeek={(ms) => {
               if (!isEngineInitialized()) return
               const engine = getOrCreateEngine()
               engine.seek(ms / 1000)
+              setCurrentTimeMs(ms)
             }}
           />
 
