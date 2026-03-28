@@ -90,12 +90,12 @@ def process_track_analysis(track_id: str) -> None:
         client = get_supabase_client()
         track_resp = (
             client.table("tracks")
-            .select("audio_storage_path")
+            .select("audio_path")
             .eq("id", track_id)
             .single()
             .execute()
         )
-        storage_path = track_resp.data["audio_storage_path"]
+        storage_path = track_resp.data["audio_path"]
 
         local_path = os.path.join(output_dir, f"analyze_{track_id}{Path(storage_path).suffix}")
         download_audio(storage_path, local_path)
@@ -107,14 +107,14 @@ def process_track_analysis(track_id: str) -> None:
                 "track_id": track_id,
                 "bpm": analysis.bpm,
                 "bpm_confidence": analysis.bpm_confidence,
-                "musical_key": analysis.key,
+                "key": analysis.key,
                 "key_confidence": analysis.key_confidence,
-                "camelot_code": analysis.camelot,
+                "camelot": analysis.camelot,
                 "energy": analysis.energy,
                 "danceability": analysis.danceability,
                 "loudness_db": analysis.loudness_db,
-                "intro_end_seconds": analysis.intro_end_seconds,
-                "outro_start_seconds": analysis.outro_start_seconds,
+                "intro_end_s": analysis.intro_end_seconds,
+                "outro_start_s": analysis.outro_start_seconds,
             }
         ).execute()
 

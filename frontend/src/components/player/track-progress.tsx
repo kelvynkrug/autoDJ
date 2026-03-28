@@ -18,6 +18,11 @@ function formatTime(ms: number): string {
 export function TrackProgress({ durationMs, isPlaying, className = '' }: TrackProgressProps) {
   const [currentMs, setCurrentMs] = useState(0)
 
+  // Reset when track changes (duration changes)
+  useEffect(() => {
+    setCurrentMs(0)
+  }, [durationMs])
+
   useEffect(() => {
     if (!isPlaying) return
     const interval = setInterval(() => {
