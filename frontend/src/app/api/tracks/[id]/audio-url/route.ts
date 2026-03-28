@@ -41,6 +41,17 @@ export async function GET(
     )
   }
 
+  // URL externa (preview do Deezer/Spotify) - retornar diretamente
+  if (track.audio_storage_path.startsWith('http')) {
+    return NextResponse.json({
+      data: {
+        url: track.audio_storage_path,
+        format: 'mp3',
+        durationMs: track.duration_ms,
+      },
+    })
+  }
+
   const serviceClient = await createServiceClient()
 
   const { data: signedUrlData, error: signedUrlError } = await serviceClient

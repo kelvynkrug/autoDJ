@@ -16,6 +16,7 @@ interface ProviderTrack {
   album: string
   duration_ms: number
   cover_url: string | null
+  preview_url: string | null
 }
 
 interface PlaylistData {
@@ -121,6 +122,7 @@ async function fetchSpotifyPlaylist(playlistId: string): Promise<PlaylistData> {
           album: album?.name ?? '',
           duration_ms: (t.duration_ms as number) ?? 0,
           cover_url: album?.images?.[0]?.url ?? null,
+          preview_url: (t.preview_url as string) ?? null,
         }
       })
       .filter((t): t is NonNullable<typeof t> => t !== null),
@@ -144,6 +146,7 @@ async function fetchDeezerPlaylist(playlistId: string): Promise<PlaylistData> {
       album: (t.album as Record<string, string>)?.title ?? '',
       duration_ms: ((t.duration as number) ?? 0) * 1000,
       cover_url: (t.album as Record<string, string>)?.cover_medium ?? null,
+      preview_url: (t.preview as string) ?? null,
     })),
   }
 }
@@ -240,7 +243,8 @@ export async function POST(request: Request) {
         spotify_id: provider === 'spotify' ? t.provider_track_id : null,
         youtube_id: provider === 'google' ? t.provider_track_id : null,
         deezer_id: provider === 'deezer' ? t.provider_track_id : null,
-        status: 'pending' as const,
+        audio_storage_path: t.preview_url ?? null,
+        status: t.preview_url ? 'ready' : 'pending',
       }))
 
       const { data: insertedTracks, error: tracksError } = await supabase
@@ -273,8 +277,9 @@ export async function POST(request: Request) {
       }
     }
 
-    // Disparar download no backend
-    if (playlistData.tracks.length > 0) {
+    // Disparar download no backend apenas para tracks sem preview
+    const tracksWithoutPreview = playlistData.tracks.filter((t) => !t.preview_url)
+    if (tracksWithoutPreview.length > 0) {
       try {
         const insertedTrackIds = (await supabase
           .from('playlist_tracks')
@@ -283,19 +288,26 @@ export async function POST(request: Request) {
           .order('position', { ascending: true })
         ).data ?? []
 
-        const downloadTracks = insertedTrackIds.map((pt: { track_id: string }, i: number) => ({
-          track_id: pt.track_id,
-          query: `${playlistData.tracks[i].artist} - ${playlistData.tracks[i].title}`,
-          youtube_id: provider === 'google' ? playlistData.tracks[i].provider_track_id : null,
-          artist: playlistData.tracks[i].artist,
-          title: playlistData.tracks[i].title,
-        }))
+        const downloadTracks = insertedTrackIds
+          .map((pt: { track_id: string }, i: number) => {
+            if (playlistData.tracks[i].preview_url) return null
+            return {
+              track_id: pt.track_id,
+              query: `${playlistData.tracks[i].artist} - ${playlistData.tracks[i].title}`,
+              youtube_id: provider === 'google' ? playlistData.tracks[i].provider_track_id : null,
+              artist: playlistData.tracks[i].artist,
+              title: playlistData.tracks[i].title,
+            }
+          })
+          .filter((t): t is NonNullable<typeof t> => t !== null)
 
-        await fetch(`${BACKEND_URL}/api/v1/download/batch`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ tracks: downloadTracks }),
-        })
+        if (downloadTracks.length > 0) {
+          await fetch(`${BACKEND_URL}/api/v1/download/batch`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ tracks: downloadTracks }),
+          })
+        }
       } catch {
         // Backend offline nao deve bloquear a importacao
       }

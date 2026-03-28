@@ -9,24 +9,26 @@ logger = logging.getLogger(__name__)
 
 def search_youtube(query: str, max_results: int = 5) -> list[YouTubeSearchResult]:
     """Busca videos no YouTube via yt-dlp (sem API key)."""
+    search_query = f"ytsearch{max_results}:{query}"
+
     ydl_opts = {
         "quiet": True,
         "no_warnings": True,
-        "extract_flat": True,
-        "default_search": f"ytsearch{max_results}",
-        "skip_download": True,
+        "extract_flat": "in_playlist",
+        "force_generic_extractor": False,
     }
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            result = ydl.extract_info(query, download=False)
+            result = ydl.extract_info(search_query, download=False)
 
         if not result or "entries" not in result:
+            logger.warning("Nenhum resultado para query: %s", query)
             return []
 
         results: list[YouTubeSearchResult] = []
         for entry in result["entries"]:
-            if not entry:
+            if not entry or not entry.get("id"):
                 continue
             results.append(
                 YouTubeSearchResult(
@@ -37,6 +39,7 @@ def search_youtube(query: str, max_results: int = 5) -> list[YouTubeSearchResult
                 )
             )
 
+        logger.info("Busca '%s': %d resultados encontrados", query, len(results))
         return results
 
     except Exception:

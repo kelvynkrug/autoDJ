@@ -36,16 +36,22 @@ def download_by_youtube_id(youtube_id: str, output_dir: str) -> DownloadResult:
 
 def download_by_query(artist: str, title: str, output_dir: str) -> DownloadResult:
     """Busca no YouTube e baixa o melhor resultado."""
-    query = f"{artist} - {title}"
-    results = search_youtube(query, max_results=3)
+    query = f"{artist} {title} audio"
+    results = search_youtube(query, max_results=5)
 
     if not results:
-        raise ValueError(f"Nenhum resultado encontrado para: {query}")
+        query_fallback = f"{artist} {title}"
+        logger.warning("Sem resultados para '%s', tentando fallback: '%s'", query, query_fallback)
+        results = search_youtube(query_fallback, max_results=5)
+
+    if not results:
+        raise ValueError(f"Nenhum resultado encontrado para: {artist} - {title}")
 
     best = results[0]
     logger.info(
-        "Melhor resultado para '%s': %s (%s)",
-        query,
+        "Melhor resultado para '%s - %s': %s (%s)",
+        artist,
+        title,
         best.title,
         best.video_id,
     )
