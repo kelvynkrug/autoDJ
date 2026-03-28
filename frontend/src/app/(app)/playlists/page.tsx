@@ -115,14 +115,16 @@ export default function PlaylistsPage() {
   async function handleReconnect(provider: 'spotify' | 'google') {
     const scopes: Record<string, string> = {
       spotify: 'playlist-read-private playlist-read-collaborative user-library-read',
-      google: 'https://www.googleapis.com/auth/youtube.readonly',
+      google: 'https://www.googleapis.com/auth/youtube.readonly openid email profile',
     }
 
+    // Use signInWithOAuth to force a fresh token
     await supabase.auth.signInWithOAuth({
       provider,
       options: {
         redirectTo: `${window.location.origin}/callback?next=/playlists`,
         scopes: scopes[provider],
+        queryParams: { prompt: 'consent' },
       },
     })
   }
